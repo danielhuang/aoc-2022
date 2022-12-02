@@ -1,19 +1,19 @@
 #![feature(file_create_new)]
 #![feature(return_position_impl_trait_in_trait)]
 
-use cli_clipboard::set_contents;
 use defaultmap::DefaultHashMap;
 use derive_more::{Add, AddAssign, Sub, SubAssign, Sum};
 use itertools::Itertools;
 use owo_colors::OwoColorize;
-use reqwest::blocking::{get, Client};
+use reqwest::blocking::Client;
 use std::collections::{HashMap, HashSet};
-use std::env;
 use std::fmt::{Debug, Display};
 use std::fs::{read_to_string, File};
+use std::hash::Hash;
 use std::io::Write;
 use std::ops::Mul;
 use std::process::{Command, Stdio};
+use std::{env, io};
 
 #[cfg(debug_assertions)]
 const DEBUG: bool = true;
@@ -31,12 +31,17 @@ pub fn load_input(day: u8) -> String {
             Ok(x) => x,
             Err(e) => {
                 println!("{e:?}");
-                println!("Downloading input...");
+                print!("Downloading input... ");
+                io::stdout().flush().unwrap();
                 let input = Client::new()
                     .get(url)
                     .header(
                         "cookie",
                         format!("session={}", env::var("AOC_SESSION").unwrap()),
+                    )
+                    .header(
+                        "user-agent",
+                        "github.com/danielhuang/aoc-2022 - hello@danielh.cc",
                     )
                     .send()
                     .unwrap()
@@ -48,6 +53,7 @@ pub fn load_input(day: u8) -> String {
                     .unwrap()
                     .write_all(input.as_bytes())
                     .unwrap();
+                println!("done!");
                 input
             }
         }
@@ -255,4 +261,37 @@ pub fn transpose<T: Default + Clone + Ord>(
     s: impl IntoIterator<Item = impl IntoIterator<Item = T>>,
 ) -> Vec<Vec<T>> {
     transpose_vec(collect_2d(s))
+}
+
+pub trait Intify {
+    fn int(&self) -> i64;
+    fn uint(&self) -> usize;
+}
+
+impl<T: Display> Intify for T {
+    fn int(&self) -> i64 {
+        self.to_string().parse().unwrap()
+    }
+
+    fn uint(&self) -> usize {
+        self.to_string().parse().unwrap()
+    }
+}
+
+pub fn set_n<C: FromIterator<T>, T: Eq + Hash + Clone>(
+    a: impl IntoIterator<Item = T>,
+    b: impl IntoIterator<Item = T>,
+) -> C {
+    let a: HashSet<_> = a.into_iter().collect();
+    let b: HashSet<_> = b.into_iter().collect();
+    a.intersection(&b).cloned().collect()
+}
+
+pub fn set_u<C: FromIterator<T>, T: Eq + Hash + Clone>(
+    a: impl IntoIterator<Item = T>,
+    b: impl IntoIterator<Item = T>,
+) -> C {
+    let a: HashSet<_> = a.into_iter().collect();
+    let b: HashSet<_> = b.into_iter().collect();
+    a.union(&b).cloned().collect()
 }
