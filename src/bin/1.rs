@@ -19,5 +19,6 @@ fn main() {
         .rev()
         .collect_vec();
 
+    cp(x[0]);
     cp(x[0] + x[1] + x[2]);
 }

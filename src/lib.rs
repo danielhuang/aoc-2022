@@ -1,5 +1,8 @@
 #![feature(file_create_new)]
 #![feature(return_position_impl_trait_in_trait)]
+#![feature(iter_array_chunks)]
+#![feature(const_for)]
+#![feature(box_syntax, box_patterns)]
 
 use defaultmap::DefaultHashMap;
 use derive_more::{Add, AddAssign, Sub, SubAssign, Sum};
@@ -202,7 +205,7 @@ impl Mul<Coordinate3D> for Matrix3 {
 pub fn cp(x: impl Display) {
     if DEBUG {
         println!("value: {} (debug mode, not copying)", x.blue().bold());
-    } else {
+    } else if env::var("AOC_COPY_CLIPBOARD").is_ok() {
         let mut cmd = Command::new("xclip")
             .arg("-sel")
             .arg("clip")
@@ -217,6 +220,11 @@ pub fn cp(x: impl Display) {
         cmd.stdin.take().unwrap();
         cmd.wait().unwrap();
         println!("value: {} (copied to clipboard)", x.green().bold());
+    } else {
+        println!(
+            "value: {} (set AOC_COPY_CLIPBOARD=1 to enable copy)",
+            x.green().bold()
+        );
     }
 }
 
@@ -278,20 +286,25 @@ impl<T: Display> Intify for T {
     }
 }
 
-pub fn set_n<C: FromIterator<T>, T: Eq + Hash + Clone>(
+pub fn set_n<T: Eq + Hash + Clone>(
     a: impl IntoIterator<Item = T>,
     b: impl IntoIterator<Item = T>,
-) -> C {
+) -> HashSet<T> {
     let a: HashSet<_> = a.into_iter().collect();
     let b: HashSet<_> = b.into_iter().collect();
     a.intersection(&b).cloned().collect()
 }
 
-pub fn set_u<C: FromIterator<T>, T: Eq + Hash + Clone>(
+pub fn set_u<T: Eq + Hash + Clone>(
     a: impl IntoIterator<Item = T>,
     b: impl IntoIterator<Item = T>,
-) -> C {
+) -> HashSet<T> {
     let a: HashSet<_> = a.into_iter().collect();
     let b: HashSet<_> = b.into_iter().collect();
     a.union(&b).cloned().collect()
 }
+
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
