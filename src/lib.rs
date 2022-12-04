@@ -308,3 +308,19 @@ use mimalloc::MiMalloc;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
+
+pub fn grab_nums<const N: usize>(s: &str) -> [i64; N] {
+    s.split(|c: char| !c.is_numeric() && c != '-')
+        .map(|x| x.trim().int())
+        .collect_vec()
+        .try_into()
+        .unwrap()
+}
+
+pub fn grab_unums<const N: usize>(s: &str) -> [usize; N] {
+    s.split(|c: char| !c.is_numeric())
+        .map(|x| x.trim().uint())
+        .collect_vec()
+        .try_into()
+        .unwrap()
+}
