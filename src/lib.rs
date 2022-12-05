@@ -4,19 +4,19 @@
 #![feature(const_for)]
 #![feature(box_syntax, box_patterns)]
 
-use defaultmap::DefaultHashMap;
-use derive_more::{Add, AddAssign, Sub, SubAssign, Sum};
-use itertools::Itertools;
-use owo_colors::OwoColorize;
-use reqwest::blocking::Client;
-use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, Display};
-use std::fs::{read_to_string, File};
-use std::hash::Hash;
-use std::io::Write;
-use std::ops::Mul;
-use std::process::{Command, Stdio};
-use std::{env, io};
+pub use defaultmap::DefaultHashMap;
+pub use derive_more::{Add, AddAssign, Sub, SubAssign, Sum};
+pub use itertools::Itertools;
+pub use owo_colors::OwoColorize;
+pub use reqwest::blocking::Client;
+pub use std::collections::*;
+pub use std::fmt::{Debug, Display};
+pub use std::fs::{read_to_string, File};
+pub use std::hash::Hash;
+pub use std::io::Write;
+pub use std::ops::Mul;
+pub use std::process::{Command, Stdio};
+pub use std::{env, io};
 
 #[cfg(debug_assertions)]
 const DEBUG: bool = true;
@@ -311,7 +311,13 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 pub fn grab_nums<const N: usize>(s: &str) -> [i64; N] {
     s.split(|c: char| !c.is_numeric() && c != '-')
-        .map(|x| x.trim().int())
+        .filter_map(|x| {
+            if x.is_empty() {
+                None
+            } else {
+                Some(x.trim().int())
+            }
+        })
         .collect_vec()
         .try_into()
         .unwrap()
@@ -319,8 +325,32 @@ pub fn grab_nums<const N: usize>(s: &str) -> [i64; N] {
 
 pub fn grab_unums<const N: usize>(s: &str) -> [usize; N] {
     s.split(|c: char| !c.is_numeric())
-        .map(|x| x.trim().uint())
+        .filter_map(|x| {
+            if x.is_empty() {
+                None
+            } else {
+                Some(x.trim().uint())
+            }
+        })
         .collect_vec()
         .try_into()
         .unwrap()
 }
+
+pub trait ExtraItertools: Iterator + Sized {
+    fn collect_set(self) -> HashSet<Self::Item>
+    where
+        Self::Item: Eq + Hash,
+    {
+        self.collect()
+    }
+
+    fn collect_string(self) -> String
+    where
+        String: FromIterator<Self::Item>,
+    {
+        self.collect()
+    }
+}
+
+impl<T: Iterator + Sized> ExtraItertools for T {}

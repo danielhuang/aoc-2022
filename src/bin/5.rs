@@ -396,26 +396,46 @@
 use aoc_2022::*;
 
 fn main() {
-    let input = load_input(4);
+    let input = load_input(5);
 
-    let mut count1 = 0;
-    let mut count2 = 0;
+    let (header, body) = input.split_once("\n\n").unwrap();
 
-    for line in input.lines() {
-        let [a1, a2, b1, b2] = grab_unums(line);
+    for part2 in [false, true] {
+        let mut crates = vec![];
 
-        let aa = (a1..=a2).collect_set();
-        let bb = (b1..=b2).collect_set();
-
-        if aa.is_subset(&bb) || aa.is_superset(&bb) {
-            count1 += 1;
+        for line in header.lines() {
+            let mut row = vec![];
+            for c in &line.chars().chunks(4) {
+                let c = c.collect_vec();
+                row.push(c[1]);
+            }
+            crates.push(row);
         }
 
-        if !set_n(aa, bb).is_empty() {
-            count2 += 1;
+        let mut crates = transpose(crates);
+        for c in crates.iter_mut() {
+            c.reverse();
+            c.retain(|&x| x != ' ');
         }
+
+        for line in body.lines() {
+            let [count, from, to] = grab_unums(line);
+            let mut temp = vec![];
+            for _ in 0..count {
+                let num = crates[from - 1].pop().unwrap();
+                temp.push(num);
+            }
+            if part2 {
+                temp.reverse();
+            }
+            crates[to - 1].extend(temp);
+        }
+
+        let mut x = String::new();
+        for c in crates {
+            x.push(*c.last().unwrap());
+        }
+
+        cp(x);
     }
-
-    cp(count1);
-    cp(count2);
 }
