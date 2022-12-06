@@ -19,6 +19,31 @@ fn main() {
 
     let mut score = 0;
 
+    for (opponent_shape, own_shape) in input.clone() {
+        score += match (own_shape, opponent_shape) {
+            ('X', 'A') => 3,
+            ('Y', 'A') => 6,
+            ('Z', 'A') => 0,
+            ('X', 'B') => 0,
+            ('Y', 'B') => 3,
+            ('Z', 'B') => 6,
+            ('X', 'C') => 6,
+            ('Y', 'C') => 0,
+            ('Z', 'C') => 3,
+            _ => unreachable!(),
+        };
+        score += match own_shape {
+            'X' => 1,
+            'Y' => 2,
+            'Z' => 3,
+            _ => unreachable!(),
+        }
+    }
+
+    cp(score);
+
+    let mut score = 0;
+
     for (opponent_shape, own) in input {
         let own_shape = match (opponent_shape, own) {
             ('A', 'X') => 'C',

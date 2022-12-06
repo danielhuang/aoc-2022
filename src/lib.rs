@@ -1,3 +1,4 @@
+#![allow(incomplete_features)]
 #![feature(file_create_new)]
 #![feature(return_position_impl_trait_in_trait)]
 #![feature(iter_array_chunks)]
@@ -9,13 +10,16 @@ pub use derive_more::{Add, AddAssign, Sub, SubAssign, Sum};
 pub use itertools::Itertools;
 pub use owo_colors::OwoColorize;
 pub use reqwest::blocking::Client;
+use std::any::Any;
 pub use std::collections::*;
 pub use std::fmt::{Debug, Display};
+use std::fs::metadata;
 pub use std::fs::{read_to_string, File};
 pub use std::hash::Hash;
 pub use std::io::Write;
 pub use std::ops::Mul;
 pub use std::process::{Command, Stdio};
+use std::sync::Mutex;
 pub use std::{env, io};
 
 #[cfg(debug_assertions)]
@@ -24,34 +28,41 @@ const DEBUG: bool = true;
 #[cfg(not(debug_assertions))]
 const DEBUG: bool = false;
 
+fn fetch(url: &str) -> String {
+    let input = Client::new()
+        .get(url)
+        .header(
+            "cookie",
+            format!("session={}", env::var("AOC_SESSION").unwrap()),
+        )
+        .header(
+            "user-agent",
+            "github.com/danielhuang/aoc-2022 - hello@danielh.cc",
+        )
+        .send()
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .text()
+        .unwrap();
+    input
+}
+
+static SUBMITTED: Mutex<bool> = Mutex::new(false);
+
 pub fn load_input(day: u8) -> String {
     if DEBUG {
         read_to_string(format!("src/bin/{}.sample.txt", day)).unwrap()
     } else {
         let url = format!("https://adventofcode.com/2022/day/{}/input", day);
-        let path = format!("src/bin/{}.input.txt", day);
-        match read_to_string(&path) {
+        let path = format!("target/{}.input.txt", day);
+        let input = match read_to_string(&path) {
             Ok(x) => x,
             Err(e) => {
                 println!("{e:?}");
                 print!("Downloading input... ");
                 io::stdout().flush().unwrap();
-                let input = Client::new()
-                    .get(url)
-                    .header(
-                        "cookie",
-                        format!("session={}", env::var("AOC_SESSION").unwrap()),
-                    )
-                    .header(
-                        "user-agent",
-                        "github.com/danielhuang/aoc-2022 - hello@danielh.cc",
-                    )
-                    .send()
-                    .unwrap()
-                    .error_for_status()
-                    .unwrap()
-                    .text()
-                    .unwrap();
+                let input = fetch(&url);
                 File::create_new(&path)
                     .unwrap()
                     .write_all(input.as_bytes())
@@ -59,7 +70,26 @@ pub fn load_input(day: u8) -> String {
                 println!("done!");
                 input
             }
-        }
+        };
+        let submitted_path = format!("target/{}.submitted", day);
+        let submitted = match metadata(&submitted_path) {
+            Ok(_) => true,
+            Err(_) => {
+                let page = fetch(&format!("https://adventofcode.com/2022/day/{}", day));
+                if page.contains(
+                    "Both parts of this puzzle are complete! They provide two gold stars: **",
+                ) {
+                    if let Err(e) = File::create_new(submitted_path) {
+                        dbg!(&e);
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+        };
+        *SUBMITTED.lock().unwrap() = submitted;
+        input
     }
 }
 
@@ -122,20 +152,47 @@ impl Mul<i64> for Coordinate2D {
     }
 }
 
-pub fn print_grid<T: Clone + Debug>(grid: &DefaultHashMap<Coordinate2D, T>) {
+pub fn parse_grid<T: Clone>(
+    s: &str,
+    mut f: impl FnMut(char) -> T,
+    default: T,
+) -> DefaultHashMap<Coordinate2D, T> {
+    let mut grid = DefaultHashMap::new(default);
+
+    for (y, line) in s.lines().enumerate() {
+        for (x, c) in line.chars().enumerate() {
+            grid[Coordinate2D(x as _, y as _)] = f(c);
+        }
+    }
+
+    grid
+}
+
+pub fn print_grid<T: Clone + Debug + Any>(grid: &DefaultHashMap<Coordinate2D, T>) {
     let min_x = grid.keys().map(|x| x.0).min().unwrap();
     let max_x = grid.keys().map(|x| x.0).max().unwrap();
     let min_y = grid.keys().map(|x| x.1).min().unwrap();
     let max_y = grid.keys().map(|x| x.1).max().unwrap();
 
-    for x in min_x..=max_x {
-        for y in min_y..=max_y {
+    println!("printing grid (len={})", grid.len());
+
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
             let c = Coordinate2D(x, y);
-            let data = format!("{:?}", grid[c]).chars().next().unwrap();
-            print!("{}", data);
+            let data = format!("{:?}", grid[c]);
+            if data.starts_with('\'') && data.ends_with('\'') {
+                print!("{}", data.chars().rev().nth(1).unwrap());
+            } else if data.starts_with('\"') && data.ends_with('\"') {
+                let mut data = data.chars().skip(1).collect_vec();
+                data.pop();
+                print!("{}", data.into_iter().collect_string());
+            } else {
+                print!("{}", data.chars().next().unwrap());
+            }
         }
         println!();
     }
+    println!();
 }
 
 pub fn print_hashmap<T: Clone + Debug>(grid: &HashMap<Coordinate2D, T>) {
@@ -206,20 +263,27 @@ pub fn cp(x: impl Display) {
     if DEBUG {
         println!("value: {} (debug mode, not copying)", x.blue().bold());
     } else if env::var("AOC_COPY_CLIPBOARD").is_ok() {
-        let mut cmd = Command::new("xclip")
-            .arg("-sel")
-            .arg("clip")
-            .stdin(Stdio::piped())
-            .spawn()
-            .unwrap();
-        cmd.stdin
-            .as_mut()
-            .unwrap()
-            .write_all(x.to_string().as_bytes())
-            .unwrap();
-        cmd.stdin.take().unwrap();
-        cmd.wait().unwrap();
-        println!("value: {} (copied to clipboard)", x.green().bold());
+        if !*SUBMITTED.lock().unwrap() {
+            let mut cmd = Command::new("xclip")
+                .arg("-sel")
+                .arg("clip")
+                .stdin(Stdio::piped())
+                .spawn()
+                .unwrap();
+            cmd.stdin
+                .as_mut()
+                .unwrap()
+                .write_all(x.to_string().as_bytes())
+                .unwrap();
+            cmd.stdin.take().unwrap();
+            cmd.wait().unwrap();
+            println!("value: {} (copied to clipboard)", x.green().bold());
+        } else {
+            println!(
+                "value: {} (already submitted, not copying)",
+                x.green().bold()
+            );
+        }
     } else {
         println!(
             "value: {} (set AOC_COPY_CLIPBOARD=1 to enable copy)",
@@ -252,20 +316,20 @@ pub fn collect_2d<T>(s: impl IntoIterator<Item = impl IntoIterator<Item = T>>) -
     s.into_iter().map(|x| x.into_iter().collect()).collect()
 }
 
-pub fn transpose_vec<T: Default + Clone + Ord>(s: Vec<Vec<T>>) -> Vec<Vec<T>> {
+pub fn transpose_vec<T: Default + Clone>(s: Vec<Vec<T>>) -> Vec<Vec<T>> {
     assert!(s.iter().map(|x| x.len()).all_equal());
     assert!(!s.is_empty());
     assert!(!s[0].is_empty());
     let mut result = vec![vec![T::default(); s.len()]; s[0].len()];
-    for (i, row) in s.iter_c().enumerate() {
-        for (j, x) in row.iter_c().enumerate() {
+    for (i, row) in s.iter().cloned().enumerate() {
+        for (j, x) in row.iter().cloned().enumerate() {
             result[j][i] = x;
         }
     }
     result
 }
 
-pub fn transpose<T: Default + Clone + Ord>(
+pub fn transpose<T: Default + Clone>(
     s: impl IntoIterator<Item = impl IntoIterator<Item = T>>,
 ) -> Vec<Vec<T>> {
     transpose_vec(collect_2d(s))
