@@ -259,7 +259,16 @@ impl Mul<Coordinate3D> for Matrix3 {
     }
 }
 
+static COPIES: Mutex<usize> = Mutex::new(0);
+
 pub fn cp(x: impl Display) {
+    let mut copies = COPIES.lock().unwrap();
+    if *copies >= 2 {
+        println!("value: {}", x.red().bold());
+        panic!("already copied twice");
+    }
+    *copies += 1;
+
     if DEBUG {
         println!("value: {} (debug mode, not copying)", x.blue().bold());
     } else if env::var("AOC_COPY_CLIPBOARD").is_ok() {
@@ -270,12 +279,10 @@ pub fn cp(x: impl Display) {
                 .stdin(Stdio::piped())
                 .spawn()
                 .unwrap();
-            cmd.stdin
-                .as_mut()
-                .unwrap()
-                .write_all(x.to_string().as_bytes())
-                .unwrap();
-            cmd.stdin.take().unwrap();
+            let mut stdin = cmd.stdin.take().unwrap();
+            stdin.write_all(x.to_string().as_bytes()).unwrap();
+            stdin.flush().unwrap();
+            drop(stdin);
             cmd.wait().unwrap();
             println!("value: {} (copied to clipboard)", x.green().bold());
         } else {
@@ -418,3 +425,11 @@ pub trait ExtraItertools: Iterator + Sized {
 }
 
 impl<T: Iterator + Sized> ExtraItertools for T {}
+
+pub fn freqs<T: Hash + Eq>(i: impl IntoIterator<Item = T>) -> DefaultHashMap<T, usize> {
+    let mut result = DefaultHashMap::new(0);
+    for x in i {
+        result[x] += 1;
+    }
+    result
+}
