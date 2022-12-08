@@ -395,72 +395,47 @@
 
 use aoc_2022::*;
 
-fn stringify(x: &[String]) -> String {
-    let mut r = "/".to_string();
-    for n in x {
-        r.push_str(n);
-        r.push('/');
-    }
-    r
-}
-
 fn main() {
-    let input = load_input(7);
+    let input = load_input(8);
 
-    let mut cd = Vec::new();
+    let mut count = 0;
 
-    let mut files = HashMap::new();
+    let grid = parse_grid(&input, |c| c.to_string().parse().unwrap(), -1i64);
 
-    let mut dirs = HashSet::new();
+    let mut max = 0;
 
-    for line in input.lines() {
-        if let Some(cmd) = line.strip_prefix("$ ") {
-            if let Some(path) = cmd.strip_prefix("cd ") {
-                if path == ".." {
-                    cd.pop();
-                } else if path == "/" {
-                    cd = vec![];
-                } else {
-                    cd.push(path.to_string());
-                }
-                dirs.insert(stringify(&cd));
+    for (&tree, &height) in grid.iter() {
+        let mut visible_from_any_edge = false;
+        let mut scenic_score = 1;
+        for direction in Coordinate2D::ADJACENT {
+            let visible_from_edge = tree
+                .go_straight(direction)
+                .test(|x| grid[x] == -1, |x| grid[x] >= height);
+
+            if visible_from_edge {
+                visible_from_any_edge = true;
             }
-        } else {
-            let (size, name) = line.split_once(' ').unwrap();
-            if size != "dir" {
-                let mut fullpath = cd.clone();
-                fullpath.push(name.to_string());
-                let size = size.uint();
-                let f = files.insert(stringify(&fullpath), (size, name));
-                assert!(f.is_none());
+
+            let mut see_distance = tree
+                .go_straight(direction)
+                .take_while(|x| grid[x] < height && grid[x] != -1)
+                .count();
+
+            if !visible_from_edge {
+                see_distance += 1;
             }
+
+            scenic_score *= see_distance;
+        }
+
+        max = scenic_score.max(max);
+        if visible_from_any_edge {
+            count += 1;
         }
     }
 
-    let mut total = 0;
+    print_grid(&grid);
 
-    let mut sizes = vec![];
-
-    for path in dirs {
-        dbg!(&path);
-        let all_files = files
-            .iter()
-            .filter(|x| x.0.starts_with(&path))
-            .collect_vec();
-        let sum = all_files.iter().map(|x| (x.1).0).sum::<usize>();
-        if sum <= 100000 {
-            total += sum;
-        }
-        sizes.push(sum);
-    }
-
-    cp(total);
-
-    let free = 70000000 - sizes.iter().max().unwrap();
-
-    cp(sizes
-        .iter_c()
-        .filter(|x| free + x >= 30000000)
-        .min()
-        .unwrap());
+    cp(count);
+    cp(max);
 }

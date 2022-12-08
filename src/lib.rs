@@ -17,6 +17,7 @@ use std::fs::metadata;
 pub use std::fs::{read_to_string, File};
 pub use std::hash::Hash;
 pub use std::io::Write;
+use std::iter::from_fn;
 pub use std::ops::Mul;
 pub use std::process::{Command, Stdio};
 use std::sync::Mutex;
@@ -94,11 +95,11 @@ pub fn load_input(day: u8) -> String {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Add, AddAssign, Sub, SubAssign, Sum, Hash, PartialOrd, Ord,
+    Clone, Copy, PartialEq, Eq, Add, AddAssign, Sub, SubAssign, Sum, Hash, PartialOrd, Ord,
 )]
 pub struct Coordinate2D(pub i64, pub i64);
 impl Coordinate2D {
-    pub const ADJACENT: [Self; 4] = [Self(0, 1), Self(1, 0), Self(0, -1), Self(-1, 0)];
+    pub const ADJACENT: [Self; 4] = [Self(0, 1), Self(1, 0), Self(-1, 0), Self(0, -1)];
 
     pub const ADJACENT_CORNERS: [Self; 8] = [
         Self(0, 1),
@@ -141,6 +142,20 @@ impl Coordinate2D {
 
     pub fn zero(self) -> bool {
         self == Self(0, 0)
+    }
+
+    pub fn go_straight(self, unit: Self) -> impl Iterator<Item = Self> {
+        let mut pos = self;
+        from_fn(move || {
+            pos += unit;
+            Some(pos)
+        })
+    }
+}
+
+impl Debug for Coordinate2D {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.0, self.1)
     }
 }
 
@@ -273,17 +288,20 @@ pub fn cp(x: impl Display) {
         println!("value: {} (debug mode, not copying)", x.blue().bold());
     } else if env::var("AOC_COPY_CLIPBOARD").is_ok() {
         if !*SUBMITTED.lock().unwrap() {
-            let mut cmd = Command::new("xclip")
-                .arg("-sel")
-                .arg("clip")
-                .stdin(Stdio::piped())
-                .spawn()
-                .unwrap();
-            let mut stdin = cmd.stdin.take().unwrap();
-            stdin.write_all(x.to_string().as_bytes()).unwrap();
-            stdin.flush().unwrap();
-            drop(stdin);
-            cmd.wait().unwrap();
+            // Copy it twice to work around a bug.
+            for _ in 0..2 {
+                let mut cmd = Command::new("xclip")
+                    .arg("-sel")
+                    .arg("clip")
+                    .stdin(Stdio::piped())
+                    .spawn()
+                    .unwrap();
+                let mut stdin = cmd.stdin.take().unwrap();
+                stdin.write_all(x.to_string().as_bytes()).unwrap();
+                stdin.flush().unwrap();
+                drop(stdin);
+                cmd.wait().unwrap();
+            }
             println!("value: {} (copied to clipboard)", x.green().bold());
         } else {
             println!(
@@ -421,6 +439,22 @@ pub trait ExtraItertools: Iterator + Sized {
         String: FromIterator<Self::Item>,
     {
         self.collect()
+    }
+
+    fn test(
+        self,
+        mut pass: impl FnMut(&Self::Item) -> bool,
+        mut fail: impl FnMut(&Self::Item) -> bool,
+    ) -> bool {
+        for item in self {
+            if pass(&item) {
+                return true;
+            }
+            if fail(&item) {
+                return false;
+            }
+        }
+        unreachable!("the iterator does not pass or fail");
     }
 }
 
