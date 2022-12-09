@@ -434,8 +434,6 @@ fn main() {
         }
     }
 
-    print_grid(&grid);
-
     cp(count);
     cp(max);
 }

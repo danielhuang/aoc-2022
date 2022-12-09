@@ -67,7 +67,6 @@
     const_btree_len,
     const_caller_location,
     const_cell_into_inner,
-    const_char_convert,
     const_clone,
     const_cmp,
     const_collections_with_hasher,
@@ -395,7 +394,6 @@
 )]
 
 use aoc_2022::*;
-use itertools::Itertools;
 
 fn main() {
     let input = load_input(3);

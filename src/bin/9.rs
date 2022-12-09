@@ -393,73 +393,51 @@
     yeet_desugar_details
 )]
 
+use std::cmp::Ordering;
+
 use aoc_2022::*;
 
-fn stringify(x: &[String]) -> String {
-    let mut r = "/".to_string();
-    for n in x {
-        r.push_str(n);
-        r.push('/');
+fn inc(x: i64) -> i64 {
+    match x.cmp(&0) {
+        Ordering::Less => x - 1,
+        Ordering::Greater => x + 1,
+        Ordering::Equal => 0,
     }
-    r
 }
 
 fn main() {
-    let input = load_input(7);
+    let input = load_input(9);
 
-    let mut cd = Vec::new();
+    for size in [2, 10] {
+        let mut knots = vec![Coordinate2D(0, 0); size];
 
-    let mut files = HashMap::new();
+        let mut covered = HashSet::new();
 
-    let mut dirs = HashSet::new();
+        for line in input.lines() {
+            let (direction, amount) = line.split_once(' ').unwrap();
+            let amount = amount.int();
+            let unit = match direction {
+                "U" => Coordinate2D(0, 1),
+                "D" => Coordinate2D(0, -1),
+                "L" => Coordinate2D(-1, 0),
+                "R" => Coordinate2D(1, 0),
+                _ => unreachable!(),
+            };
 
-    for line in input.lines() {
-        if let Some(cmd) = line.strip_prefix("$ ") {
-            if let Some(path) = cmd.strip_prefix("cd ") {
-                if path == ".." {
-                    cd.pop();
-                } else if path == "/" {
-                    cd = vec![];
-                } else {
-                    cd.push(path.to_string());
+            for _ in 0..amount {
+                knots[0] += unit;
+
+                for i in 0..(knots.len() - 1) {
+                    if (knots[i] - knots[i + 1]).manhat_corners() > 1 {
+                        let sep = knots[i] - knots[i + 1];
+                        knots[i + 1] += Coordinate2D(inc(sep.0) / 2, inc(sep.1) / 2);
+                    }
                 }
-                dirs.insert(stringify(&cd));
-            }
-        } else {
-            let (size, name) = line.split_once(' ').unwrap();
-            if size != "dir" {
-                let mut fullpath = cd.clone();
-                fullpath.push(name.to_string());
-                let size = size.uint();
-                let f = files.insert(stringify(&fullpath), (size, name));
-                assert!(f.is_none());
+
+                covered.insert(*knots.last().unwrap());
             }
         }
+
+        cp(covered.len());
     }
-
-    let mut total = 0;
-
-    let mut sizes = vec![];
-
-    for path in dirs {
-        let all_files = files
-            .iter()
-            .filter(|x| x.0.starts_with(&path))
-            .collect_vec();
-        let sum = all_files.iter().map(|x| (x.1).0).sum::<usize>();
-        if sum <= 100000 {
-            total += sum;
-        }
-        sizes.push(sum);
-    }
-
-    cp(total);
-
-    let free = 70000000 - sizes.iter().max().unwrap();
-
-    cp(sizes
-        .iter_c()
-        .filter(|x| free + x >= 30000000)
-        .min()
-        .unwrap());
 }

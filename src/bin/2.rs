@@ -15,8 +15,6 @@ fn main() {
         })
         .collect_vec();
 
-    dbg!(&input);
-
     let mut score = 0;
 
     for (opponent_shape, own_shape) in input.clone() {

@@ -21,6 +21,7 @@ use std::iter::from_fn;
 pub use std::ops::Mul;
 pub use std::process::{Command, Stdio};
 use std::sync::Mutex;
+use std::time::Instant;
 pub use std::{env, io};
 
 #[cfg(debug_assertions)]
@@ -51,8 +52,10 @@ fn fetch(url: &str) -> String {
 
 static SUBMITTED: Mutex<bool> = Mutex::new(false);
 
+static START_TS: Mutex<Option<Instant>> = Mutex::new(None);
+
 pub fn load_input(day: u8) -> String {
-    if DEBUG {
+    let input = if DEBUG {
         read_to_string(format!("src/bin/{}.sample.txt", day)).unwrap()
     } else {
         let url = format!("https://adventofcode.com/2022/day/{}/input", day);
@@ -91,7 +94,9 @@ pub fn load_input(day: u8) -> String {
         };
         *SUBMITTED.lock().unwrap() = submitted;
         input
-    }
+    };
+    *START_TS.lock().unwrap() = Some(Instant::now());
+    input
 }
 
 #[derive(
@@ -140,6 +145,10 @@ impl Coordinate2D {
         self.0.abs() + self.1.abs()
     }
 
+    pub fn manhat_corners(self) -> i64 {
+        self.1.abs().max(self.0.abs())
+    }
+
     pub fn zero(self) -> bool {
         self == Self(0, 0)
     }
@@ -150,6 +159,15 @@ impl Coordinate2D {
             pos += unit;
             Some(pos)
         })
+    }
+
+    pub fn is_aligned(self, other: Self) -> bool {
+        self.0 == other.0 || self.1 == other.1
+    }
+
+    pub fn is_exactly_diagonal(self, other: Self) -> bool {
+        let diff = other - self;
+        diff.1.abs() == diff.0.abs()
     }
 }
 
@@ -241,7 +259,7 @@ pub fn print_hashset(grid: &HashSet<Coordinate2D>) {
     let min_y = grid.iter().map(|x| x.1).min().unwrap();
     let max_y = grid.iter().map(|x| x.1).max().unwrap();
 
-    for y in min_y..=max_y {
+    for y in (min_y..=max_y).rev() {
         for x in min_x..=max_x {
             let c = Coordinate2D(x, y);
             print!("{}", if grid.contains(&c) { "█" } else { " " });
@@ -277,6 +295,9 @@ impl Mul<Coordinate3D> for Matrix3 {
 static COPIES: Mutex<usize> = Mutex::new(0);
 
 pub fn cp(x: impl Display) {
+    let elapsed = START_TS.lock().unwrap().unwrap().elapsed();
+    let elapsed = format!("{:?}", elapsed);
+
     let mut copies = COPIES.lock().unwrap();
     if *copies >= 2 {
         println!("value: {}", x.red().bold());
@@ -285,7 +306,11 @@ pub fn cp(x: impl Display) {
     *copies += 1;
 
     if DEBUG {
-        println!("value: {} (debug mode, not copying)", x.blue().bold());
+        println!(
+            "value: {} (debug mode, not copying) took {}",
+            x.blue().bold(),
+            elapsed.yellow()
+        );
     } else if env::var("AOC_COPY_CLIPBOARD").is_ok() {
         if !*SUBMITTED.lock().unwrap() {
             // Copy it twice to work around a bug.
@@ -305,16 +330,20 @@ pub fn cp(x: impl Display) {
             println!("value: {} (copied to clipboard)", x.green().bold());
         } else {
             println!(
-                "value: {} (already submitted, not copying)",
-                x.green().bold()
+                "value: {} (already submitted, not copying) took {}",
+                x.green().bold(),
+                elapsed.yellow()
             );
         }
     } else {
         println!(
-            "value: {} (set AOC_COPY_CLIPBOARD=1 to enable copy)",
-            x.green().bold()
+            "value: {} (set AOC_COPY_CLIPBOARD=1 to enable copy) took {}",
+            x.green().bold(),
+            elapsed.yellow()
         );
     }
+
+    *START_TS.lock().unwrap() = Some(Instant::now());
 }
 
 pub trait CollectionExt<T> {
