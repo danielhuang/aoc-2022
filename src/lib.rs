@@ -6,18 +6,20 @@
 #![feature(box_syntax, box_patterns)]
 
 pub use defaultmap::DefaultHashMap;
+use derive_more::Neg;
 pub use derive_more::{Add, AddAssign, Sub, SubAssign, Sum};
 pub use itertools::Itertools;
+pub use num::*;
 pub use owo_colors::OwoColorize;
 pub use reqwest::blocking::Client;
-use std::any::Any;
+pub use std::any::Any;
 pub use std::collections::*;
 pub use std::fmt::{Debug, Display};
 use std::fs::metadata;
 pub use std::fs::{read_to_string, File};
 pub use std::hash::Hash;
 pub use std::io::Write;
-use std::iter::from_fn;
+pub use std::iter::from_fn;
 pub use std::ops::Mul;
 pub use std::process::{Command, Stdio};
 use std::sync::Mutex;
@@ -100,7 +102,7 @@ pub fn load_input(day: u8) -> String {
 }
 
 #[derive(
-    Clone, Copy, PartialEq, Eq, Add, AddAssign, Sub, SubAssign, Sum, Hash, PartialOrd, Ord,
+    Clone, Copy, PartialEq, Eq, Add, AddAssign, Sub, SubAssign, Sum, Hash, PartialOrd, Ord, Neg,
 )]
 pub struct Coordinate2D(pub i64, pub i64);
 impl Coordinate2D {
@@ -268,7 +270,7 @@ pub fn print_hashset(grid: &HashSet<Coordinate2D>) {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Add, AddAssign, Sub, SubAssign, Sum, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Add, AddAssign, Sub, SubAssign, Sum, Hash, Neg)]
 pub struct Coordinate3D(pub i64, pub i64, pub i64);
 
 impl Mul<i64> for Coordinate3D {
@@ -277,6 +279,48 @@ impl Mul<i64> for Coordinate3D {
     fn mul(self, rhs: i64) -> Self::Output {
         Coordinate3D(self.0 * rhs, self.1 * rhs, self.2 * rhs)
     }
+}
+
+impl Coordinate3D {
+    pub fn cross(self, other: Self) -> Self {
+        let Self(a, b, c) = self;
+        let Self(x, y, z) = other;
+        Self(b * z - c * y, c * x - a * z, a * y - b * x)
+    }
+
+    pub fn manhat(self) -> i64 {
+        self.0.abs() + self.1.abs() + self.2.abs()
+    }
+
+    pub fn manhat_corners(self) -> i64 {
+        self.0.abs().max(self.1.abs()).max(self.2.abs())
+    }
+}
+
+pub fn all_rotations() -> Vec<Matrix3> {
+    let base = [
+        Coordinate3D(1, 0, 0),
+        Coordinate3D(0, 1, 0),
+        Coordinate3D(0, 0, 1),
+        Coordinate3D(-1, 0, 0),
+        Coordinate3D(0, -1, 0),
+        Coordinate3D(0, 0, -1),
+    ];
+    let mut result = vec![];
+    for &v1 in &base {
+        for &v2 in &base {
+            if v1 != v2 && v1 * -1 != v2 {
+                let Coordinate3D(a, b, c) = v1;
+                let Coordinate3D(x, y, z) = v2;
+                let cross = Coordinate3D(b * z - c * y, c * x - a * z, a * y - b * x);
+                result.push(Matrix3 {
+                    cols: [v1, v2, cross],
+                })
+            }
+        }
+    }
+    assert_eq!(result.len(), 24);
+    result
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -496,3 +540,11 @@ pub fn freqs<T: Hash + Eq>(i: impl IntoIterator<Item = T>) -> DefaultHashMap<T, 
     }
     result
 }
+
+pub trait SignedExt: Signed {
+    fn with_abs(self, f: impl FnOnce(Self) -> Self) -> Self {
+        f(self.abs()) * self.signum()
+    }
+}
+
+impl<T: Signed> SignedExt for T {}

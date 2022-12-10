@@ -394,44 +394,52 @@
 )]
 
 use aoc_2022::*;
-
-fn inc(x: i64) -> i64 {
-    x.with_abs(|n| n + 1)
-}
+use std::fmt::Write;
 
 fn main() {
-    let input = load_input(9);
+    let input = load_input(10);
 
-    for size in [2, 10] {
-        let mut knots = vec![Coordinate2D(0, 0); size];
+    let mut cycle = 0;
+    let mut x = 1;
 
-        let mut covered = HashSet::new();
+    let mut sigs = 0;
 
-        for line in input.lines() {
-            let (direction, amount) = line.split_once(' ').unwrap();
-            let amount = amount.int();
-            let unit = match direction {
-                "U" => Coordinate2D(0, 1),
-                "D" => Coordinate2D(0, -1),
-                "L" => Coordinate2D(-1, 0),
-                "R" => Coordinate2D(1, 0),
-                _ => unreachable!(),
-            };
+    let mut display = String::from("█");
 
-            for _ in 0..amount {
-                knots[0] += unit;
+    let mut tick = |num: i64| {
+        cycle += 1;
 
-                for i in 0..(knots.len() - 1) {
-                    if (knots[i] - knots[i + 1]).manhat_corners() > 1 {
-                        let sep = knots[i] - knots[i + 1];
-                        knots[i + 1] += Coordinate2D(inc(sep.0) / 2, inc(sep.1) / 2);
-                    }
-                }
-
-                covered.insert(*knots.last().unwrap());
-            }
+        if (cycle + 20) % 40 == 0 {
+            sigs += cycle * x;
         }
 
-        cp(covered.len());
+        x += num;
+
+        if (cycle) % 40 == 0 {
+            writeln!(display).unwrap();
+        }
+
+        if ((cycle) % 40 - x).abs() < 2 {
+            write!(display, "█").unwrap();
+        } else {
+            write!(display, " ").unwrap();
+        }
+    };
+
+    for line in input.lines() {
+        if line == "noop" {
+            tick(0);
+        } else {
+            let num = line.strip_prefix("addx ").unwrap().int();
+            tick(0);
+            tick(num);
+        }
     }
+
+    cp(sigs);
+
+    println!();
+    println!("Part 2:");
+    println!("{}", display);
+    cp("∅");
 }
