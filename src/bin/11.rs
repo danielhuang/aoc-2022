@@ -393,54 +393,114 @@
     yeet_desugar_details
 )]
 
+use std::mem::take;
+
 use aoc_2022::*;
-use std::fmt::Write;
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+enum Op {
+    Add(i64),
+    Mul(i64),
+    Sqr,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+struct Monkey {
+    items: Vec<i64>,
+    op: Op,
+    divis: i64,
+    if_true: usize,
+    if_false: usize,
+}
 
 fn main() {
-    let input = load_input(10);
+    let input = load_input(11);
 
-    let mut x = 1;
+    let monkeys = input
+        .split("\n\n")
+        .map(|x| {
+            let lines = x.lines().collect_vec();
+            let items = lines[1]
+                .trim()
+                .strip_prefix("Starting items: ")
+                .unwrap()
+                .split(", ")
+                .map(|x| x.int())
+                .collect_vec();
 
-    let mut sigs = 0;
+            let op = lines[2].trim();
+            let op = op.strip_prefix("Operation: new = old ").unwrap();
 
-    let mut display = String::from("█");
+            let c = op.chars().next().unwrap();
+            let op = if op == "* old" {
+                Op::Sqr
+            } else {
+                let [num] = grab_nums(op);
+                if c == '+' {
+                    Op::Add(num)
+                } else {
+                    Op::Mul(num)
+                }
+            };
 
-    let mut ins = vec![];
+            let [divis] = grab_nums(lines[3]);
 
-    for line in input.lines() {
-        if line == "noop" {
-            ins.push(0);
-        } else {
-            let num = line.strip_prefix("addx ").unwrap().int();
-            ins.push(0);
-            ins.push(num);
+            let [if_true] = grab_unums(lines[4]);
+            let [if_false] = grab_unums(lines[5]);
+
+            Monkey {
+                items,
+                op,
+                divis,
+                if_true,
+                if_false,
+            }
+        })
+        .collect_vec();
+
+    for (rounds, part2) in [(20, false), (10000, true)] {
+        let mut monkeys = monkeys.clone();
+
+        let mut modulo = 1i64;
+        for divis in monkeys.iter().map(|x| x.divis) {
+            modulo = modulo.lcm(&divis);
         }
+
+        let mut inspect_counts = vec![0i64; monkeys.len()];
+
+        for _ in 0..rounds {
+            for i in 0..monkeys.len() {
+                for item in take(&mut monkeys[i].items) {
+                    let mut item = item;
+
+                    match monkeys[i].op.clone() {
+                        Op::Add(x) => item += x,
+                        Op::Mul(x) => item *= x,
+                        Op::Sqr => item *= item,
+                    }
+
+                    if !part2 {
+                        item /= 3;
+                    }
+
+                    let dest = if item % monkeys[i].divis == 0 {
+                        monkeys[i].if_true
+                    } else {
+                        monkeys[i].if_false
+                    };
+
+                    monkeys[dest]
+                        .items
+                        .push(if part2 { item % modulo } else { item });
+
+                    inspect_counts[i] += 1;
+                }
+            }
+        }
+
+        inspect_counts.sort();
+        inspect_counts.reverse();
+
+        cp(inspect_counts[0] * inspect_counts[1]);
     }
-
-    for (cycle, num) in ins.into_iter().enumerate() {
-        let cycle = cycle as i64 + 1;
-
-        if (cycle + 20) % 40 == 0 {
-            sigs += cycle * x;
-        }
-
-        x += num;
-
-        if (cycle) % 40 == 0 {
-            writeln!(display).unwrap();
-        }
-
-        if ((cycle) % 40 - x).abs() < 2 {
-            write!(display, "█").unwrap();
-        } else {
-            write!(display, " ").unwrap();
-        }
-    }
-
-    cp(sigs);
-
-    println!();
-    println!("Part 2:");
-    println!("{}", display);
-    cp("∅");
 }

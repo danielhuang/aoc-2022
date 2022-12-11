@@ -14,6 +14,7 @@ pub use owo_colors::OwoColorize;
 pub use reqwest::blocking::Client;
 pub use std::any::Any;
 pub use std::collections::*;
+use std::env::args;
 pub use std::fmt::{Debug, Display};
 use std::fs::metadata;
 pub use std::fs::{read_to_string, File};
@@ -57,6 +58,18 @@ static SUBMITTED: Mutex<bool> = Mutex::new(false);
 static START_TS: Mutex<Option<Instant>> = Mutex::new(None);
 
 pub fn load_input(day: u8) -> String {
+    let exe = args().next().unwrap();
+    let exe_day = exe.rsplit('/').next().unwrap().int() as u8;
+
+    if day != exe_day {
+        println!(
+            "{}",
+            "[!] Warning: Specified day does not match the executable name [!]"
+                .red()
+                .bold()
+        );
+    }
+
     let input = if DEBUG {
         read_to_string(format!("src/bin/{}.sample.txt", day)).unwrap()
     } else {
