@@ -393,112 +393,49 @@
     yeet_desugar_details
 )]
 
-use std::mem::take;
-
 use aoc_2022::*;
+use pathfinding::prelude::bfs;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-enum Op {
-    Add(i64),
-    Mul(i64),
-    Sqr,
+fn elev(c: u8) -> i32 {
+    if c == b'S' {
+        return b'a' as _;
+    }
+    if c == b'E' {
+        return b'z' as _;
+    }
+    c as _
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-struct Monkey {
-    items: Vec<i64>,
-    op: Op,
-    divis: i64,
-    if_true: usize,
-    if_false: usize,
+fn search(grid: &Grid2D<u8>, start: Coordinate2D) -> Option<usize> {
+    let result = bfs(
+        &start,
+        |pos| {
+            let nexts = pos.adjacent();
+            let cur = grid[pos];
+            nexts
+                .into_iter()
+                .filter(|x| grid[x] != b' ' && elev(grid[x]) - elev(cur) <= 1)
+                .collect_vec()
+        },
+        |x| grid[x] == b'E',
+    );
+    result.map(|x| x.len() - 1)
 }
 
 fn main() {
-    let input = load_input(11);
+    let input = load_input(12);
+    let grid = parse_grid(&input, |c| c as u8, b' ');
 
-    let monkeys = input
-        .split("\n\n")
-        .map(|x| {
-            let lines = x.lines().collect_vec();
-            let items = lines[1]
-                .trim()
-                .strip_prefix("Starting items: ")
-                .unwrap()
-                .split(", ")
-                .map(|x| x.int())
-                .collect_vec();
+    let part1 = search(&grid, *grid.iter().find(|x| *x.1 == b'S').unwrap().0).unwrap();
 
-            let op = lines[2].trim();
-            let op = op.strip_prefix("Operation: new = old ").unwrap();
+    cp(part1);
 
-            let c = op.chars().next().unwrap();
-            let op = if op == "* old" {
-                Op::Sqr
-            } else {
-                let [num] = grab_nums(op);
-                if c == '+' {
-                    Op::Add(num)
-                } else {
-                    Op::Mul(num)
-                }
-            };
+    let part2 = grid
+        .iter()
+        .filter(|x| *x.1 == b'a' || *x.1 == b'S')
+        .filter_map(|x| search(&grid, *x.0))
+        .min()
+        .unwrap();
 
-            let [divis] = grab_nums(lines[3]);
-
-            let [if_true] = grab_unums(lines[4]);
-            let [if_false] = grab_unums(lines[5]);
-
-            Monkey {
-                items,
-                op,
-                divis,
-                if_true,
-                if_false,
-            }
-        })
-        .collect_vec();
-
-    for (rounds, part2) in [(20, false), (10000, true)] {
-        let mut monkeys = monkeys.clone();
-
-        let mut modulo = 1i64;
-        for divis in monkeys.iter().map(|x| x.divis) {
-            modulo = modulo.lcm(&divis);
-        }
-
-        let mut inspect_counts = vec![0i64; monkeys.len()];
-
-        for _ in 0..rounds {
-            for i in 0..monkeys.len() {
-                for mut item in take(&mut monkeys[i].items) {
-                    match monkeys[i].op.clone() {
-                        Op::Add(x) => item += x,
-                        Op::Mul(x) => item *= x,
-                        Op::Sqr => item *= item,
-                    }
-
-                    if !part2 {
-                        item /= 3;
-                    }
-
-                    let dest = if item % monkeys[i].divis == 0 {
-                        monkeys[i].if_true
-                    } else {
-                        monkeys[i].if_false
-                    };
-
-                    monkeys[dest]
-                        .items
-                        .push(if part2 { item % modulo } else { item });
-
-                    inspect_counts[i] += 1;
-                }
-            }
-        }
-
-        inspect_counts.sort();
-        inspect_counts.reverse();
-
-        cp(inspect_counts[0] * inspect_counts[1]);
-    }
+    cp(part2);
 }

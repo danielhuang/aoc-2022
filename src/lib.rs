@@ -200,11 +200,9 @@ impl Mul<i64> for Coordinate2D {
     }
 }
 
-pub fn parse_grid<T: Clone>(
-    s: &str,
-    mut f: impl FnMut(char) -> T,
-    default: T,
-) -> DefaultHashMap<Coordinate2D, T> {
+pub type Grid2D<T> = DefaultHashMap<Coordinate2D, T>;
+
+pub fn parse_grid<T: Clone>(s: &str, mut f: impl FnMut(char) -> T, default: T) -> Grid2D<T> {
     let mut grid = DefaultHashMap::new(default);
 
     for (y, line) in s.lines().enumerate() {
@@ -216,7 +214,7 @@ pub fn parse_grid<T: Clone>(
     grid
 }
 
-pub fn print_grid<T: Clone + Debug + Any>(grid: &DefaultHashMap<Coordinate2D, T>) {
+pub fn print_grid<T: Clone + Debug + Any>(grid: &Grid2D<T>) {
     let min_x = grid.keys().map(|x| x.0).min().unwrap();
     let max_x = grid.keys().map(|x| x.0).max().unwrap();
     let min_y = grid.keys().map(|x| x.1).min().unwrap();
