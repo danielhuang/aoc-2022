@@ -11,6 +11,8 @@ pub use derive_more::{Add, AddAssign, Sub, SubAssign, Sum};
 pub use itertools::Itertools;
 pub use num::*;
 pub use owo_colors::OwoColorize;
+pub use pathfinding::directed::count_paths::count_paths;
+pub use pathfinding::prelude::*;
 pub use reqwest::blocking::Client;
 pub use std::any::Any;
 pub use std::collections::*;
@@ -21,6 +23,7 @@ pub use std::fs::{read_to_string, File};
 pub use std::hash::Hash;
 pub use std::io::Write;
 pub use std::iter::from_fn;
+use std::ops::Div;
 pub use std::ops::Mul;
 pub use std::process::{Command, Stdio};
 use std::sync::Mutex;
@@ -200,6 +203,14 @@ impl Mul<i64> for Coordinate2D {
     }
 }
 
+impl Div<i64> for Coordinate2D {
+    type Output = Coordinate2D;
+
+    fn div(self, rhs: i64) -> Self::Output {
+        Coordinate2D(self.0 / rhs, self.1 / rhs)
+    }
+}
+
 pub type Grid2D<T> = DefaultHashMap<Coordinate2D, T>;
 
 pub fn parse_grid<T: Clone>(s: &str, mut f: impl FnMut(char) -> T, default: T) -> Grid2D<T> {
@@ -289,6 +300,14 @@ impl Mul<i64> for Coordinate3D {
 
     fn mul(self, rhs: i64) -> Self::Output {
         Coordinate3D(self.0 * rhs, self.1 * rhs, self.2 * rhs)
+    }
+}
+
+impl Div<i64> for Coordinate3D {
+    type Output = Coordinate3D;
+
+    fn div(self, rhs: i64) -> Self::Output {
+        Coordinate3D(self.0 / rhs, self.1 / rhs, self.2 / rhs)
     }
 }
 

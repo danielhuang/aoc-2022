@@ -393,48 +393,77 @@
     yeet_desugar_details
 )]
 
+use std::cmp::Ordering;
+
 use aoc_2022::*;
+use serde_json::Value;
 
-fn elev(c: u8) -> i32 {
-    if c == b'S' {
-        return b'a' as _;
+fn cmp(a: &Value, b: &Value) -> Ordering {
+    if let Some(a) = a.as_i64() {
+        if let Some(b) = b.as_i64() {
+            return a.cmp(&b);
+        }
     }
-    if c == b'E' {
-        return b'z' as _;
-    }
-    c as _
-}
 
-fn search(grid: &Grid2D<u8>, start: Coordinate2D) -> Option<usize> {
-    let result = bfs(
-        &start,
-        |pos| {
-            let nexts = pos.adjacent();
-            let cur = grid[pos];
-            nexts
-                .into_iter()
-                .filter(|x| grid[x] != b' ' && elev(grid[x]) - elev(cur) <= 1)
-                .collect_vec()
-        },
-        |x| grid[x] == b'E',
-    );
-    result.map(|x| x.len() - 1)
+    let a = a
+        .as_array()
+        .cloned()
+        .unwrap_or_else(|| vec![a.as_i64().unwrap().into()]);
+
+    let b = b
+        .as_array()
+        .cloned()
+        .unwrap_or_else(|| vec![b.as_i64().unwrap().into()]);
+
+    for (a, b) in a.iter().zip(b.iter()) {
+        if !cmp(a, b).is_eq() {
+            return cmp(a, b);
+        }
+    }
+
+    a.len().cmp(&b.len())
 }
 
 fn main() {
-    let input = load_input(12);
-    let grid = parse_grid(&input, |c| c as u8, b' ');
+    let input = load_input(13);
 
-    let part1 = search(&grid, *grid.iter().find(|x| *x.1 == b'S').unwrap().0).unwrap();
+    let mut count = 0;
 
-    cp(part1);
+    let mut packets = vec![];
 
-    let part2 = grid
+    for (i, section) in input.split("\n\n").enumerate() {
+        let (a, b) = section.split_once('\n').unwrap();
+
+        let a: Value = serde_json::from_str(a).unwrap();
+        let b: Value = serde_json::from_str(b).unwrap();
+
+        dbg!(i, cmp(&a, &b));
+
+        if cmp(&a, &b).is_lt() {
+            count += i + 1;
+        }
+
+        packets.push(a);
+        packets.push(b);
+    }
+
+    packets.push(Value::Array(vec![Value::Array(vec![Value::Number(
+        (2).into(),
+    )])]));
+    packets.push(Value::Array(vec![Value::Array(vec![Value::Number(
+        (6).into(),
+    )])]));
+
+    packets.sort_by(cmp);
+
+    let marker1 = packets
         .iter()
-        .filter(|x| *x.1 == b'a' || *x.1 == b'S')
-        .filter_map(|x| search(&grid, *x.0))
-        .min()
-        .unwrap();
+        .position(|x| x == &Value::Array(vec![Value::Array(vec![Value::Number((2).into())])]));
 
-    cp(part2);
+    let marker2 = packets
+        .iter()
+        .position(|x| x == &Value::Array(vec![Value::Array(vec![Value::Number((6).into())])]));
+
+    cp(count);
+    cp((marker1.unwrap() + 1) * (marker2.unwrap() + 1));
 }
