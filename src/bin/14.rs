@@ -395,40 +395,73 @@
 
 use aoc_2022::*;
 
-fn marker(num: i64) -> Snailfish {
-    Snailfish::Array(vec![Snailfish::Array(vec![Snailfish::Num(num)])])
-}
-
 fn main() {
-    let input = load_input(13);
+    let input = load_input(14);
 
-    let mut count = 0;
+    let mut walls = HashSet::new();
 
-    let mut packets = vec![];
+    for line in input.lines() {
+        let points = line.split(" -> ");
+        let mut path = vec![];
 
-    for (i, section) in input.split("\n\n").enumerate() {
-        let (a, b) = section.split_once('\n').unwrap();
-
-        let a: Snailfish = a.parse().unwrap();
-        let b: Snailfish = b.parse().unwrap();
-
-        if a < b {
-            count += i + 1;
+        for p in points {
+            let [x, y] = grab_nums(p);
+            path.push(Coordinate2D(x, y));
         }
 
-        packets.push(a);
-        packets.push(b);
+        for [a, b] in path.array_windows().cloned() {
+            let dif = b - a;
+            let unit = dif / dif.manhat();
+            assert!(b.is_aligned(a));
+            for p in a.go_straight(unit).take(dif.manhat().uint()) {
+                walls.insert(p);
+            }
+            walls.insert(a);
+            walls.insert(b);
+        }
     }
 
-    cp(count);
+    let mut sands = HashSet::new();
+    let floor = walls.iter().map(|x| x.1).max().unwrap() + 1;
 
-    packets.push(marker(2));
-    packets.push(marker(6));
+    let mut part1 = None;
 
-    packets.sort();
+    loop {
+        let mut sand = Coordinate2D(500, 0);
+        loop {
+            let mut moved = false;
 
-    let marker1 = packets.iter().position(|x| x == &marker(2));
-    let marker2 = packets.iter().position(|x| x == &marker(6));
+            for goto in [
+                Coordinate2D(0, 1) + sand,
+                Coordinate2D(-1, 1) + sand,
+                Coordinate2D(1, 1) + sand,
+            ] {
+                if !walls.contains(&goto) && !sands.contains(&goto) {
+                    sand = goto;
+                    moved = true;
+                    break;
+                }
+            }
 
-    cp((marker1.unwrap() + 1) * (marker2.unwrap() + 1));
+            if !moved {
+                break;
+            }
+
+            if sand.1 >= floor {
+                if part1.is_none() {
+                    part1 = Some(sands.len());
+                }
+                break;
+            }
+        }
+
+        if sands.contains(&Coordinate2D(500, 0)) {
+            break;
+        }
+
+        sands.insert(sand);
+    }
+
+    cp(part1.unwrap());
+    cp(sands.len());
 }

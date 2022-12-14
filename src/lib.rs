@@ -14,7 +14,10 @@ pub use owo_colors::OwoColorize;
 pub use pathfinding::directed::count_paths::count_paths;
 pub use pathfinding::prelude::*;
 pub use reqwest::blocking::Client;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 pub use std::any::Any;
+use std::cmp::Ordering;
 pub use std::collections::*;
 use std::env::args;
 pub use std::fmt::{Debug, Display};
@@ -26,6 +29,7 @@ pub use std::iter::from_fn;
 use std::ops::Div;
 pub use std::ops::Mul;
 pub use std::process::{Command, Stdio};
+use std::str::FromStr;
 use std::sync::Mutex;
 use std::time::Instant;
 pub use std::{env, io};
@@ -278,18 +282,26 @@ pub fn print_hashmap<T: Clone + Debug>(grid: &HashMap<Coordinate2D, T>) {
 }
 
 pub fn print_hashset(grid: &HashSet<Coordinate2D>) {
+    println!("printing set (len={})", grid.len());
+
+    if grid.is_empty() {
+        return;
+    }
+
     let min_x = grid.iter().map(|x| x.0).min().unwrap();
     let max_x = grid.iter().map(|x| x.0).max().unwrap();
     let min_y = grid.iter().map(|x| x.1).min().unwrap();
     let max_y = grid.iter().map(|x| x.1).max().unwrap();
 
-    for y in (min_y..=max_y).rev() {
+    for y in min_y..=max_y {
         for x in min_x..=max_x {
             let c = Coordinate2D(x, y);
             print!("{}", if grid.contains(&c) { "█" } else { " " });
         }
         println!();
     }
+
+    println!();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Add, AddAssign, Sub, SubAssign, Sum, Hash, Neg)]
@@ -578,3 +590,45 @@ pub trait SignedExt: Signed {
 }
 
 impl<T: Signed> SignedExt for T {}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Snailfish {
+    Num(i64),
+    Array(Vec<Snailfish>),
+}
+
+impl Snailfish {
+    pub fn from_value(v: &Value) -> Self {
+        match v {
+            Value::Number(x) => Self::Num(x.as_i64().unwrap()),
+            Value::Array(x) => Self::Array(x.iter().map(Self::from_value).collect_vec()),
+            _ => unreachable!("invalid"),
+        }
+    }
+}
+
+impl FromStr for Snailfish {
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s)
+    }
+}
+
+impl PartialOrd for Snailfish {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Snailfish {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Snailfish::Num(a), Snailfish::Num(b)) => a.cmp(b),
+            (Snailfish::Num(a), Snailfish::Array(b)) => vec![Snailfish::Num(*a)].cmp(b),
+            (Snailfish::Array(a), Snailfish::Num(b)) => a.cmp(&vec![Snailfish::Num(*b)]),
+            (Snailfish::Array(a), Snailfish::Array(b)) => a.cmp(b),
+        }
+    }
+}
