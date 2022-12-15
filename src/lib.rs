@@ -35,10 +35,10 @@ use std::time::Instant;
 pub use std::{env, io};
 
 #[cfg(debug_assertions)]
-const DEBUG: bool = true;
+pub const DEBUG: bool = true;
 
 #[cfg(not(debug_assertions))]
-const DEBUG: bool = false;
+pub const DEBUG: bool = false;
 
 fn fetch(url: &str) -> String {
     let input = Client::new()
@@ -183,13 +183,59 @@ impl Coordinate2D {
         })
     }
 
-    pub fn is_aligned(self, other: Self) -> bool {
+    pub fn is_aligned(self) -> bool {
+        self.0 == 0 || self.1 == 0
+    }
+
+    pub fn is_aligned_with(self, other: Self) -> bool {
         self.0 == other.0 || self.1 == other.1
     }
 
-    pub fn is_exactly_diagonal(self, other: Self) -> bool {
-        let diff = other - self;
-        diff.1.abs() == diff.0.abs()
+    pub fn is_exactly_diagonal(self) -> bool {
+        self.1.abs() == self.0.abs()
+    }
+
+    pub fn is_exactly_diagonal_with(self, other: Self) -> bool {
+        (other - self).is_exactly_diagonal()
+    }
+
+    pub fn goto(self, dest: Self) -> impl Iterator<Item = Self> {
+        let unit = (dest - self).normalize();
+        std::iter::once(self).chain(self.go_straight(unit).take((dest - self).manhat() as _))
+    }
+
+    pub fn goto_diag(self, dest: Self) -> impl Iterator<Item = Self> {
+        let unit = (dest - self).normalize_diag();
+        std::iter::once(self).chain(
+            self.go_straight(unit)
+                .take((dest - self).manhat_corners() as _),
+        )
+    }
+
+    pub fn normalize(self) -> Self {
+        assert!(self.is_aligned());
+        self / self.manhat()
+    }
+
+    pub fn normalize_diag(self) -> Self {
+        assert!(self.is_exactly_diagonal());
+        self / self.manhat_corners()
+    }
+
+    pub fn up(self, n: i64) -> Self {
+        self + Self(0, -1) * n
+    }
+
+    pub fn down(self, n: i64) -> Self {
+        self + Self(0, 1) * n
+    }
+
+    pub fn left(self, n: i64) -> Self {
+        self + Self(-1, 0) * n
+    }
+
+    pub fn right(self, n: i64) -> Self {
+        self + Self(1, 0) * n
     }
 }
 
@@ -629,6 +675,44 @@ impl Ord for Snailfish {
             (Snailfish::Num(a), Snailfish::Array(b)) => vec![Snailfish::Num(*a)].cmp(b),
             (Snailfish::Array(a), Snailfish::Num(b)) => a.cmp(&vec![Snailfish::Num(*b)]),
             (Snailfish::Array(a), Snailfish::Array(b)) => a.cmp(b),
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum IntervalEdge {
+    StartInclusive,
+    EndExclusive,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct Intervals {
+    bounds: BTreeMap<i64, IntervalEdge>,
+}
+
+impl Intervals {
+    pub fn add(&mut self, start: i64, end: i64) {
+        for to_remove in self.bounds.range(start..end).map(|x| *x.0).collect_vec() {
+            self.bounds.remove(&to_remove);
+        }
+        for to_remove in self
+            .bounds
+            .range(end..)
+            .take_while(|&x| x.1 == &IntervalEdge::EndExclusive)
+            .map(|x| *x.0)
+            .collect_vec()
+        {
+            self.bounds.remove(&to_remove);
+        }
+        self.bounds.insert(start, IntervalEdge::StartInclusive);
+        self.bounds.insert(end, IntervalEdge::EndExclusive);
+    }
+
+    pub fn is_inside(&self, x: i64) -> bool {
+        if let Some(edge) = self.bounds.range(..=x).next_back() {
+            edge.1 == &IntervalEdge::StartInclusive
+        } else {
+            false
         }
     }
 }

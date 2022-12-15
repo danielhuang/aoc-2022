@@ -395,62 +395,91 @@
 
 use aoc_2022::*;
 
-fn main() {
-    let input = load_input(14);
+fn tune(c: Coordinate2D) -> i64 {
+    c.0 * 4000000 + c.1
+}
 
-    let mut walls = HashSet::new();
+fn limit() -> i64 {
+    if DEBUG {
+        20
+    } else {
+        4000000
+    }
+}
+
+fn inside(c: Coordinate2D) -> bool {
+    c.0 >= 0 && c.0 <= limit() && c.1 >= 0 && c.1 <= limit()
+}
+
+fn main() {
+    let input = load_input(15);
+
+    dbg!(&input);
+
+    let mut no = HashSet::new();
+
+    let row = if DEBUG { 20 } else { 2000000 };
+
+    let mut beacons = HashSet::new();
+
+    let mut no_zones = Vec::new();
 
     for line in input.lines() {
-        let points = line.split(" -> ");
-        let mut path = vec![];
+        let [x1, y1, x2, y2] = grab_nums(line);
+        let sensor = Coordinate2D(x1, y1);
+        let beacon = Coordinate2D(x2, y2);
+        dbg!(&sensor, &beacon);
 
-        for p in points {
-            let [x, y] = grab_nums(p);
-            path.push(Coordinate2D(x, y));
-        }
+        beacons.insert(beacon);
 
-        for [a, b] in path.array_windows().cloned() {
-            walls.extend(a.goto(b));
+        let dist = (beacon - sensor).manhat();
+
+        no_zones.push((sensor, dist));
+
+        let from_row = (row - sensor.1).abs();
+
+        let row_hw = (from_row - dist).abs();
+        dbg!(&row_hw);
+
+        for x in 0..=row_hw {
+            no.insert(sensor.0 + x);
+            no.insert(sensor.0 - x);
         }
     }
 
-    let mut sands = HashSet::new();
-    let floor = walls.iter().map(|x| x.1).max().unwrap() + 1;
+    let empty = no
+        .iter()
+        .copied()
+        .filter(|&x| !beacons.contains(&Coordinate2D(x, row)))
+        .collect_set();
 
-    let mut part1 = None;
+    cp(empty.len());
 
-    loop {
-        let mut sand = Coordinate2D(500, 0);
-        loop {
-            let mut moved = false;
+    for (center, dist) in no_zones.iter_c() {
+        let top = center.up(dist + 1);
+        let right = center.right(dist + 1);
+        let bottom = center.down(dist + 1);
+        let left = center.left(dist + 1);
 
-            for goto in [sand.down(1), sand.left(1).down(1), sand.right(1).down(1)] {
-                if !walls.contains(&goto) && !sands.contains(&goto) {
-                    sand = goto;
-                    moved = true;
-                    break;
+        for potential_beacon in top
+            .goto_diag(right)
+            .chain(right.goto_diag(bottom))
+            .chain(bottom.goto_diag(left))
+            .chain(left.goto_diag(top))
+        {
+            if inside(potential_beacon) {
+                let mut possible = true;
+                for (sensor, cannot_be_within) in no_zones.iter_c() {
+                    let dist = (potential_beacon - sensor).manhat();
+                    if dist <= cannot_be_within {
+                        possible = false;
+                    }
+                }
+                if possible {
+                    cp(tune(potential_beacon));
+                    return;
                 }
             }
-
-            if !moved {
-                break;
-            }
-
-            if sand.1 >= floor {
-                if part1.is_none() {
-                    part1 = Some(sands.len());
-                }
-                break;
-            }
         }
-
-        if sands.contains(&Coordinate2D(500, 0)) {
-            break;
-        }
-
-        sands.insert(sand);
     }
-
-    cp(part1.unwrap());
-    cp(sands.len());
 }
