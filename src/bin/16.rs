@@ -393,118 +393,57 @@
     yeet_desugar_details
 )]
 
-use std::mem::{swap, take};
+use std::{intrinsics::size_of, mem::swap};
 
 use aoc_2022::*;
 
-fn tune(c: Coordinate2D) -> i64 {
-    c.0 * 4000000 + c.1
-}
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug, Default)]
+struct LocationSet(u64);
 
-fn limit() -> i64 {
-    if DEBUG {
-        20
-    } else {
-        4000000
-    }
-}
-
-fn inside(c: Coordinate2D) -> bool {
-    c.0 >= 0 && c.0 <= limit() && c.1 >= 0 && c.1 <= limit()
-}
-
-fn line_slope(a: Coordinate2D, b: Coordinate2D) -> i64 {
-    assert!(a.is_exactly_diagonal_with(b));
-    let diff = b - a;
-    diff.1 / diff.0
-}
-
-fn is_between(c: Coordinate2D, start: Coordinate2D, end: Coordinate2D) -> bool {
-    assert!(start.is_exactly_diagonal_with(end));
-
-    let (c, start, end) = (c - start, Coordinate2D(0, 0), end - start);
-
-    (start == c || end == c)
-        || line_slope(end, start) == line_slope(end, c)
-            && (end - start).manhat_diag() >= (end - c).manhat_diag()
-}
-
-fn find_y(Coordinate2D(x, y): Coordinate2D, m: i64) -> i64 {
-    y - m * x
-}
-
-fn find_intersect(
-    line1: (Coordinate2D, Coordinate2D),
-    line2: (Coordinate2D, Coordinate2D),
-) -> Option<Coordinate2D> {
-    if (line2.0 - line1.0).manhat() % 2 != 0 {
-        return None;
+impl LocationSet {
+    fn contains(&self, i: u8) -> bool {
+        self.0 & (1 << i) != 0
     }
 
-    let slope1 = line_slope(line1.0, line1.1);
-    let slope2 = line_slope(line2.0, line2.1);
-
-    if slope1 == slope2 {
-        return None;
-    }
-
-    let y1 = find_y(line1.0, slope1);
-    let y2 = find_y(line2.0, slope2);
-
-    let x = (y2 - y1) / (slope1 - slope2);
-    let y = slope1 * x + y1;
-
-    let point = Coordinate2D(x, y);
-
-    if is_between(point, line1.0, line1.1) {
-        Some(point)
-    } else {
-        None
+    fn insert(&mut self, i: u8) {
+        self.0 |= 1 << i;
     }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 struct State {
-    pos: String,
-    total_rate: i64,
-    opened: BTreeSet<String>,
-    steps: i32,
+    me_pos: u8,
+    el_pos: u8,
+    lost: i32,
+    opened: LocationSet,
+    minutes: u8,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
-struct State2 {
-    mpos: String,
-    epos: String,
-    lost: i64,
-    opened: BTreeSet<String>,
-    minutes: i64,
-}
-
-impl State2 {
-    fn m_goto(&self, pos: String) -> State2 {
+impl State {
+    fn me_goto(&self, pos: u8) -> State {
         let mut s = self.clone();
-        s.mpos = pos;
+        s.me_pos = pos;
         s
     }
 
-    fn e_goto(&self, pos: String) -> State2 {
+    fn el_goto(&self, pos: u8) -> State {
         let mut s = self.clone();
-        s.epos = pos;
+        s.el_pos = pos;
         s
     }
 
-    fn open(&self, pos: &str, rate: i64) -> Option<State2> {
+    fn open(&self, pos: u8, rate: i32) -> Option<State> {
         if !self.opened.contains(pos) && rate > 0 {
             let mut s = self.clone();
             s.lost -= rate;
-            s.opened.insert(pos.to_string());
+            s.opened.insert(pos);
             Some(s)
         } else {
             None
         }
     }
 
-    fn tick(&self) -> State2 {
+    fn tick(&self) -> State {
         let mut s = self.clone();
         s.minutes += 1;
         s
@@ -526,9 +465,9 @@ fn main() {
             .collect_string();
 
         let mut to = vec![];
-        for mut item in line.rsplit(" ") {
-            if item.ends_with(",") {
-                item = item.strip_suffix(",").unwrap();
+        for mut item in line.rsplit(' ') {
+            if item.ends_with(',') {
+                item = item.strip_suffix(',').unwrap();
             }
 
             if item.len() != 2 {
@@ -540,261 +479,119 @@ fn main() {
         valves.insert(from, (rate, to));
     }
 
-    let total_pressure = valves.values().map(|x| x.0).sum::<i64>();
-    dbg!(&total_pressure);
+    assert!(valves.len() <= size_of::<LocationSet>() * 8);
 
-    let mut offset = 0;
+    let mut start_pos = 0;
 
-    let total_minutes = 26;
+    let valves: HashMap<_, _> = {
+        let mut counter = 0;
+        let mut output = HashMap::new();
+        let mut lookup = |name: String| {
+            *output.entry(name.clone()).or_insert_with(|| {
+                let x = counter;
+                if name == "AA" {
+                    start_pos = x;
+                }
+                counter += 1;
+                x
+            })
+        };
+        valves
+            .into_iter()
+            .map(|(k, (r, n))| {
+                (
+                    lookup(k),
+                    (r as i32, n.into_iter().map(&mut lookup).collect_vec()),
+                )
+            })
+            .collect()
+    };
 
-    let ops = loop {
-        let state = State2 {
-            epos: "AA".into(),
-            mpos: "AA".into(),
+    let total_pressure = valves.values().map(|x| x.0).sum();
+
+    for part2 in [false, true] {
+        let total_minutes = if part2 { 26 } else { 30 };
+
+        let initial_state = State {
+            el_pos: start_pos,
+            me_pos: start_pos,
             lost: total_pressure,
             opened: Default::default(),
             minutes: 1,
         };
 
-        let mut max_minutes = 0;
-
-        let ops = dijkstra(
-            &state,
+        let (path, _) = dijkstra(
+            &initial_state,
             |item| {
-                let mut result: Vec<Option<(State2, i64)>> = vec![];
-
-                // if item.minutes >= total_minutes {
-                //     return vec![];
-                // }
-
-                if item.minutes > max_minutes {
-                    dbg!(&item.minutes);
-                    max_minutes = item.minutes;
-                }
+                let mut result = vec![];
 
                 let mut item = item.clone();
 
-                let (me_rate, me_options) = valves[&item.mpos].clone();
-                let (el_rate, el_options) = valves[&item.epos].clone();
+                if item.me_pos > item.el_pos {
+                    swap(&mut item.me_pos, &mut item.el_pos);
+                }
+
+                let (me_rate, me_options) = valves[&item.me_pos].clone();
+                let (el_rate, el_options) = valves[&item.el_pos].clone();
 
                 result.push(Some((item.tick(), item.lost)));
 
-                if item.mpos != item.epos {
-                    // M opens, E nothing
-                    result.push(
-                        item.open(&item.mpos, me_rate)
-                            .map(|x| (x.tick(), item.lost - me_rate)),
-                    );
-                    // E opens, M nothing
-                    result.push(
-                        item.open(&item.epos, el_rate)
-                            .map(|x| (x.tick(), item.lost - el_rate)),
-                    );
-                    // both open
-                    result.push(
-                        item.open(&item.epos, el_rate)
-                            .and_then(|item2| item2.open(&item2.mpos, me_rate))
-                            .map(|x| (x.tick(), item.lost - me_rate - el_rate)),
-                    );
-                } else {
-                    // same spot: one can open, other does nothing
-                    // E opens, M nothing
-                    result.push(
-                        item.open(&item.epos, el_rate)
-                            .map(|x| (x.tick(), item.lost - el_rate)),
-                    );
-                }
-
-                for el_option in el_options.clone() {
+                if part2 {
                     for me_option in me_options.clone() {
-                        // both move
-                        result.push(Some((
-                            item.m_goto(me_option).e_goto(el_option.clone()).tick(),
-                            item.lost,
-                        )));
+                        result.push(
+                            item.me_goto(me_option)
+                                .open(item.el_pos, el_rate)
+                                .map(|x| (x.tick(), item.lost - el_rate)),
+                        );
                     }
-                }
 
-                for el_option in el_options {
-                    // E move, M open
+                    if item.me_pos != item.el_pos {
+                        result.push(
+                            item.open(item.el_pos, el_rate)
+                                .and_then(|item2| item2.open(item2.me_pos, me_rate))
+                                .map(|x| (x.tick(), item.lost - me_rate - el_rate)),
+                        );
+                    }
+
+                    for el_option in el_options.clone() {
+                        for me_option in me_options.clone() {
+                            result.push(Some((
+                                item.me_goto(me_option).el_goto(el_option).tick(),
+                                item.lost,
+                            )));
+                        }
+                    }
+
+                    for el_option in el_options {
+                        result.push(
+                            item.el_goto(el_option)
+                                .open(item.me_pos, me_rate)
+                                .map(|x| (x.tick(), item.lost - me_rate)),
+                        );
+                    }
+                } else {
+                    for me_option in me_options {
+                        result.push(Some((item.me_goto(me_option).tick(), item.lost)));
+                    }
                     result.push(
-                        item.e_goto(el_option.clone())
-                            .open(&item.mpos, me_rate)
+                        item.open(item.me_pos, me_rate)
                             .map(|x| (x.tick(), item.lost - me_rate)),
                     );
-                    // E move, M nothing
-                    result.push(Some((item.e_goto(el_option.clone()).tick(), item.lost)));
                 }
 
-                for me_option in me_options {
-                    // M move, E open
-                    result.push(
-                        item.m_goto(me_option.clone())
-                            .open(&item.epos, el_rate)
-                            .map(|x| (x.tick(), item.lost - el_rate)),
-                    );
-                    // M move, E nothing
-                    result.push(Some((item.m_goto(me_option.clone()).tick(), item.lost)));
-                }
-
-                // both nothing
-                result.push(Some((item.tick(), item.lost)));
-
-                for next in result.iter() {
-                    if let Some(next) = next {
-                        assert!(next.0.minutes == item.minutes + 1);
-                    }
-                }
-
-                for next in result.iter_mut() {
-                    if let Some(next) = next {
-                        // next.1 = item.lost;
-                    }
-                }
-
-                result.into_iter().flatten().collect_vec()
+                result.into_iter().flatten()
             },
             |item| item.minutes == total_minutes,
-        );
+        )
+        .unwrap();
 
-        if let Some(ops) = ops {
-            break ops;
+        assert!(path.len() == total_minutes as usize);
+
+        let mut released = 0;
+        for state in path {
+            released += total_pressure - state.lost;
         }
 
-        offset += 1;
-
-        dbg!(&offset);
-    };
-
-    for (min, state) in ops.0.iter().enumerate() {
-        println!("MINUTE {} {:#?}", min + 1, state);
-        println!();
+        cp(released);
     }
-
-    dbg!(&ops.0.len());
-
-    dbg!(total_pressure * total_minutes - ops.1);
-
-    let mut released = 0;
-    for state in ops.0.clone() {
-        released += total_pressure - state.lost;
-    }
-    if ops.0.len() != total_minutes as usize {
-        released += (total_minutes - ops.0.len() as i64) * (total_pressure - offset);
-        panic!("bad");
-    }
-    dbg!(&offset);
-    cp(released);
-
-    // let mut parents: HashMap<State, State> = HashMap::new();
-
-    // let reach = dfs_reach(state, |item| {
-    //     let mut result = vec![];
-
-    //     if item.steps == 30 {
-    //         return result;
-    //     }
-
-    //     let (rate, options) = valves[&item.pos].clone();
-
-    //     if !item.opened.contains(&item.pos) {
-    //         let mut opened = item.opened.clone();
-    //         opened.insert(item.pos.to_string());
-    //         result.push(State {
-    //             pos: item.pos.clone(),
-    //             total_rate: item.total_rate + rate,
-    //             opened,
-    //             steps: item.steps + 1,
-    //         });
-    //     }
-
-    //     for option in options {
-    //         result.push(State {
-    //             pos: option,
-    //             total_rate: item.total_rate,
-    //             opened: item.opened.clone(),
-    //             steps: item.steps + 1,
-    //         });
-    //     }
-
-    //     result.push(State {
-    //         pos: item.pos.clone(),
-    //         total_rate: item.total_rate,
-    //         opened: item.opened.clone(),
-    //         steps: item.steps + 1,
-    //     });
-
-    //     for r in result.clone() {
-    //         if parents.contains_key(&r) {
-    //             // dbg!(&parents);
-    //             // dbg!(&r);
-    //             // dbg!(&parents[&r]);
-    //             // dbg!(&item);
-    //             let mut released = 0;
-
-    //             let other = parents[&r].clone();
-    //             if other.total_rate < r.total_rate {
-    //                 parents.insert(r, item.clone());
-    //             }
-    //         } else {
-    //             parents.insert(r, item.clone());
-    //         }
-    //     }
-
-    //     // dbg!(&result);
-
-    //     result
-    // })
-    // .collect_vec();
-
-    // let mut max = 0;
-    // for attempt in reach {
-    //     let mut stack = vec![];
-    //     let mut top = attempt.clone();
-    //     while let Some(parent) = parents.get(&top).cloned() {
-    //         stack.push(parent.clone());
-    //         top = parent;
-    //     }
-    //     stack.reverse();
-    //     stack.push(attempt);
-
-    //     let mut released = 0;
-    //     for min in stack.clone() {
-    //         released += min.total_rate;
-    //     }
-    //     if released > max {
-    //         max = released;
-    //     }
-    // }
-
-    // cp(max);
-    // let mut visited = HashSet::new();
-
-    // let mut edge = HashSet::new();
-    // edge.insert(state);
-
-    // for _ in 0..30 {
-    //     for item in take(&mut edge) {
-    //         if !visited.contains(&item) {
-    //             let (rate, options) = valves[&item.pos].clone();
-    //             edge.insert(State {
-    //                 pos: item.pos.clone(),
-    //                 total_rate: item.total_rate + rate,
-    //                 released: item.total_rate + item.released,
-    //             });
-    //             for option in options {
-    //                 edge.insert(State {
-    //                     pos: option,
-    //                     total_rate: item.total_rate,
-    //                     released: item.total_rate + item.released,
-    //                 });
-    //             }
-    //         }
-    //     }
-    //     visited.extend(edge.clone());
-    // }
-
-    // visited.extend(edge);
-
-    // dbg!(&visited);
 }
