@@ -422,7 +422,7 @@ fn main() {
                 knots[0] += unit;
 
                 for i in 0..(knots.len() - 1) {
-                    if (knots[i] - knots[i + 1]).manhat_corners() > 1 {
+                    if (knots[i] - knots[i + 1]).manhat_diag() > 1 {
                         let sep = knots[i] - knots[i + 1];
                         knots[i + 1] += Coordinate2D(inc(sep.0) / 2, inc(sep.1) / 2);
                     }

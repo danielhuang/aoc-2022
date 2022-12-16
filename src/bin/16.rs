@@ -393,6 +393,8 @@
     yeet_desugar_details
 )]
 
+use std::mem::{swap, take};
+
 use aoc_2022::*;
 
 fn tune(c: Coordinate2D) -> i64 {
@@ -461,76 +463,338 @@ fn find_intersect(
     }
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+struct State {
+    pos: String,
+    total_rate: i64,
+    opened: BTreeSet<String>,
+    steps: i32,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+struct State2 {
+    mpos: String,
+    epos: String,
+    lost: i64,
+    opened: BTreeSet<String>,
+    minutes: i64,
+}
+
+impl State2 {
+    fn m_goto(&self, pos: String) -> State2 {
+        let mut s = self.clone();
+        s.mpos = pos;
+        s
+    }
+
+    fn e_goto(&self, pos: String) -> State2 {
+        let mut s = self.clone();
+        s.epos = pos;
+        s
+    }
+
+    fn open(&self, pos: &str, rate: i64) -> Option<State2> {
+        if !self.opened.contains(pos) && rate > 0 {
+            let mut s = self.clone();
+            s.lost -= rate;
+            s.opened.insert(pos.to_string());
+            Some(s)
+        } else {
+            None
+        }
+    }
+
+    fn tick(&self) -> State2 {
+        let mut s = self.clone();
+        s.minutes += 1;
+        s
+    }
+}
+
 fn main() {
-    let input = load_input(15);
+    let input = load_input(16);
 
-    let row = if DEBUG { 10 } else { 2000000 };
-
-    let mut beacons = HashSet::new();
-
-    let mut no_zones = Vec::new();
-
-    let mut row_no_zone = Intervals::default();
+    let mut valves = HashMap::new();
 
     for line in input.lines() {
-        let [x1, y1, x2, y2] = grab_nums(line);
-        let sensor = Coordinate2D(x1, y1);
-        let beacon = Coordinate2D(x2, y2);
+        let [rate] = grab_nums(line);
+        let from = line
+            .strip_prefix("Valve ")
+            .unwrap()
+            .chars()
+            .take(2)
+            .collect_string();
 
-        beacons.insert(beacon);
+        let mut to = vec![];
+        for mut item in line.rsplit(" ") {
+            if item.ends_with(",") {
+                item = item.strip_suffix(",").unwrap();
+            }
 
-        let dist = (beacon - sensor).manhat();
-        no_zones.push((sensor, dist));
-
-        let from_row = (row - sensor.1).abs();
-        let row_hw = (from_row - dist).abs();
-
-        row_no_zone.add(sensor.0 - row_hw, sensor.0 + row_hw + 1);
-    }
-
-    for beacon in beacons.iter_c() {
-        if beacon.1 == row {
-            row_no_zone.remove_one(beacon.0);
+            if item.len() != 2 {
+                break;
+            }
+            to.push(item.to_string());
         }
+
+        valves.insert(from, (rate, to));
     }
 
-    cp(row_no_zone.covered_size());
+    let total_pressure = valves.values().map(|x| x.0).sum::<i64>();
+    dbg!(&total_pressure);
 
-    let mut lines = vec![];
+    let mut offset = 0;
 
-    for (center, dist) in no_zones.iter_c() {
-        let top = center.up(dist + 1);
-        let right = center.right(dist + 1);
-        let bottom = center.down(dist + 1);
-        let left = center.left(dist + 1);
+    let total_minutes = 26;
 
-        lines.push((top, right.up(1).left(1)));
-        lines.push((right, bottom.up(1).right(1)));
-        lines.push((bottom, left.down(1).right(1)));
-        lines.push((left, top.down(1).left(1)));
-    }
+    let ops = loop {
+        let state = State2 {
+            epos: "AA".into(),
+            mpos: "AA".into(),
+            lost: total_pressure,
+            opened: Default::default(),
+            minutes: 1,
+        };
 
-    let mut intersections = DefaultHashMap::new(0);
+        let mut max_minutes = 0;
 
-    for (line1, line2) in lines.iter().copied().tuple_combinations() {
-        if let Some(intersection) = find_intersect(line1, line2) {
-            intersections[intersection] += 1;
-        }
-    }
+        let ops = dijkstra(
+            &state,
+            |item| {
+                let mut result: Vec<Option<(State2, i64)>> = vec![];
 
-    for (&potential_beacon, _) in intersections.iter().filter(|x| *x.1 >= 4) {
-        if inside(potential_beacon) {
-            let mut possible = true;
-            for (sensor, cannot_be_within) in no_zones.iter_c() {
-                let dist = (potential_beacon - sensor).manhat();
-                if dist <= cannot_be_within {
-                    possible = false;
+                // if item.minutes >= total_minutes {
+                //     return vec![];
+                // }
+
+                if item.minutes > max_minutes {
+                    dbg!(&item.minutes);
+                    max_minutes = item.minutes;
                 }
-            }
-            if possible {
-                cp(tune(potential_beacon));
-                return;
-            }
+
+                let mut item = item.clone();
+
+                let (me_rate, me_options) = valves[&item.mpos].clone();
+                let (el_rate, el_options) = valves[&item.epos].clone();
+
+                result.push(Some((item.tick(), item.lost)));
+
+                if item.mpos != item.epos {
+                    // M opens, E nothing
+                    result.push(
+                        item.open(&item.mpos, me_rate)
+                            .map(|x| (x.tick(), item.lost - me_rate)),
+                    );
+                    // E opens, M nothing
+                    result.push(
+                        item.open(&item.epos, el_rate)
+                            .map(|x| (x.tick(), item.lost - el_rate)),
+                    );
+                    // both open
+                    result.push(
+                        item.open(&item.epos, el_rate)
+                            .and_then(|item2| item2.open(&item2.mpos, me_rate))
+                            .map(|x| (x.tick(), item.lost - me_rate - el_rate)),
+                    );
+                } else {
+                    // same spot: one can open, other does nothing
+                    // E opens, M nothing
+                    result.push(
+                        item.open(&item.epos, el_rate)
+                            .map(|x| (x.tick(), item.lost - el_rate)),
+                    );
+                }
+
+                for el_option in el_options.clone() {
+                    for me_option in me_options.clone() {
+                        // both move
+                        result.push(Some((
+                            item.m_goto(me_option).e_goto(el_option.clone()).tick(),
+                            item.lost,
+                        )));
+                    }
+                }
+
+                for el_option in el_options {
+                    // E move, M open
+                    result.push(
+                        item.e_goto(el_option.clone())
+                            .open(&item.mpos, me_rate)
+                            .map(|x| (x.tick(), item.lost - me_rate)),
+                    );
+                    // E move, M nothing
+                    result.push(Some((item.e_goto(el_option.clone()).tick(), item.lost)));
+                }
+
+                for me_option in me_options {
+                    // M move, E open
+                    result.push(
+                        item.m_goto(me_option.clone())
+                            .open(&item.epos, el_rate)
+                            .map(|x| (x.tick(), item.lost - el_rate)),
+                    );
+                    // M move, E nothing
+                    result.push(Some((item.m_goto(me_option.clone()).tick(), item.lost)));
+                }
+
+                // both nothing
+                result.push(Some((item.tick(), item.lost)));
+
+                for next in result.iter() {
+                    if let Some(next) = next {
+                        assert!(next.0.minutes == item.minutes + 1);
+                    }
+                }
+
+                for next in result.iter_mut() {
+                    if let Some(next) = next {
+                        // next.1 = item.lost;
+                    }
+                }
+
+                result.into_iter().flatten().collect_vec()
+            },
+            |item| item.minutes == total_minutes,
+        );
+
+        if let Some(ops) = ops {
+            break ops;
         }
+
+        offset += 1;
+
+        dbg!(&offset);
+    };
+
+    for (min, state) in ops.0.iter().enumerate() {
+        println!("MINUTE {} {:#?}", min + 1, state);
+        println!();
     }
+
+    dbg!(&ops.0.len());
+
+    dbg!(total_pressure * total_minutes - ops.1);
+
+    let mut released = 0;
+    for state in ops.0.clone() {
+        released += total_pressure - state.lost;
+    }
+    if ops.0.len() != total_minutes as usize {
+        released += (total_minutes - ops.0.len() as i64) * (total_pressure - offset);
+        panic!("bad");
+    }
+    dbg!(&offset);
+    cp(released);
+
+    // let mut parents: HashMap<State, State> = HashMap::new();
+
+    // let reach = dfs_reach(state, |item| {
+    //     let mut result = vec![];
+
+    //     if item.steps == 30 {
+    //         return result;
+    //     }
+
+    //     let (rate, options) = valves[&item.pos].clone();
+
+    //     if !item.opened.contains(&item.pos) {
+    //         let mut opened = item.opened.clone();
+    //         opened.insert(item.pos.to_string());
+    //         result.push(State {
+    //             pos: item.pos.clone(),
+    //             total_rate: item.total_rate + rate,
+    //             opened,
+    //             steps: item.steps + 1,
+    //         });
+    //     }
+
+    //     for option in options {
+    //         result.push(State {
+    //             pos: option,
+    //             total_rate: item.total_rate,
+    //             opened: item.opened.clone(),
+    //             steps: item.steps + 1,
+    //         });
+    //     }
+
+    //     result.push(State {
+    //         pos: item.pos.clone(),
+    //         total_rate: item.total_rate,
+    //         opened: item.opened.clone(),
+    //         steps: item.steps + 1,
+    //     });
+
+    //     for r in result.clone() {
+    //         if parents.contains_key(&r) {
+    //             // dbg!(&parents);
+    //             // dbg!(&r);
+    //             // dbg!(&parents[&r]);
+    //             // dbg!(&item);
+    //             let mut released = 0;
+
+    //             let other = parents[&r].clone();
+    //             if other.total_rate < r.total_rate {
+    //                 parents.insert(r, item.clone());
+    //             }
+    //         } else {
+    //             parents.insert(r, item.clone());
+    //         }
+    //     }
+
+    //     // dbg!(&result);
+
+    //     result
+    // })
+    // .collect_vec();
+
+    // let mut max = 0;
+    // for attempt in reach {
+    //     let mut stack = vec![];
+    //     let mut top = attempt.clone();
+    //     while let Some(parent) = parents.get(&top).cloned() {
+    //         stack.push(parent.clone());
+    //         top = parent;
+    //     }
+    //     stack.reverse();
+    //     stack.push(attempt);
+
+    //     let mut released = 0;
+    //     for min in stack.clone() {
+    //         released += min.total_rate;
+    //     }
+    //     if released > max {
+    //         max = released;
+    //     }
+    // }
+
+    // cp(max);
+    // let mut visited = HashSet::new();
+
+    // let mut edge = HashSet::new();
+    // edge.insert(state);
+
+    // for _ in 0..30 {
+    //     for item in take(&mut edge) {
+    //         if !visited.contains(&item) {
+    //             let (rate, options) = valves[&item.pos].clone();
+    //             edge.insert(State {
+    //                 pos: item.pos.clone(),
+    //                 total_rate: item.total_rate + rate,
+    //                 released: item.total_rate + item.released,
+    //             });
+    //             for option in options {
+    //                 edge.insert(State {
+    //                     pos: option,
+    //                     total_rate: item.total_rate,
+    //                     released: item.total_rate + item.released,
+    //                 });
+    //             }
+    //         }
+    //     }
+    //     visited.extend(edge.clone());
+    // }
+
+    // visited.extend(edge);
+
+    // dbg!(&visited);
 }

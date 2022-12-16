@@ -26,8 +26,8 @@ pub use std::fs::{read_to_string, File};
 pub use std::hash::Hash;
 pub use std::io::Write;
 pub use std::iter::from_fn;
-use std::ops::Div;
 pub use std::ops::Mul;
+use std::ops::{Div, RangeBounds};
 pub use std::process::{Command, Stdio};
 use std::str::FromStr;
 use std::sync::Mutex;
@@ -117,6 +117,7 @@ pub fn load_input(day: u8) -> String {
         *SUBMITTED.lock().unwrap() = submitted;
         input
     };
+
     *START_TS.lock().unwrap() = Some(Instant::now());
     input
 }
@@ -167,7 +168,7 @@ impl Coordinate2D {
         self.0.abs() + self.1.abs()
     }
 
-    pub fn manhat_corners(self) -> i64 {
+    pub fn manhat_diag(self) -> i64 {
         self.1.abs().max(self.0.abs())
     }
 
@@ -208,7 +209,7 @@ impl Coordinate2D {
         let unit = (dest - self).normalize_diag();
         std::iter::once(self).chain(
             self.go_straight(unit)
-                .take((dest - self).manhat_corners() as _),
+                .take((dest - self).manhat_diag() as _),
         )
     }
 
@@ -219,7 +220,7 @@ impl Coordinate2D {
 
     pub fn normalize_diag(self) -> Self {
         assert!(self.is_exactly_diagonal());
-        self / self.manhat_corners()
+        self / self.manhat_diag()
     }
 
     pub fn up(self, n: i64) -> Self {
@@ -681,8 +682,8 @@ impl Ord for Snailfish {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum IntervalEdge {
-    StartInclusive,
-    EndExclusive,
+    Start,
+    End,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -691,28 +692,88 @@ pub struct Intervals {
 }
 
 impl Intervals {
+    fn remove_between(&mut self, range: impl RangeBounds<i64>) {
+        let (start, end) = (range.start_bound(), range.end_bound());
+        match (start, end) {
+            (Bound::Excluded(s), Bound::Excluded(e)) if s == e => {
+                return;
+            }
+            (Bound::Included(s) | Bound::Excluded(s), Bound::Included(e) | Bound::Excluded(e))
+                if s > e =>
+            {
+                return;
+            }
+            _ => {}
+        }
+        for to_remove in self.bounds.range(range).map(|x| *x.0).collect_vec() {
+            self.bounds.remove(&to_remove);
+        }
+    }
+
     pub fn add(&mut self, start: i64, end: i64) {
-        for to_remove in self.bounds.range(start..end).map(|x| *x.0).collect_vec() {
-            self.bounds.remove(&to_remove);
+        match (self.is_inside(start), self.is_inside(end)) {
+            (true, true) => {
+                self.remove_between((start + 1)..=end);
+            }
+            (true, false) => {
+                self.remove_between((start + 1)..=end);
+                self.bounds.insert(end, IntervalEdge::End);
+            }
+            (false, true) => {
+                self.remove_between((start + 1)..=end);
+                self.bounds.insert(start, IntervalEdge::Start);
+            }
+            (false, false) => {
+                self.remove_between((start + 1)..=end);
+                self.bounds.insert(start, IntervalEdge::Start);
+                self.bounds.insert(end, IntervalEdge::End);
+            }
         }
-        for to_remove in self
-            .bounds
-            .range(end..)
-            .take_while(|&x| x.1 == &IntervalEdge::EndExclusive)
-            .map(|x| *x.0)
-            .collect_vec()
-        {
-            self.bounds.remove(&to_remove);
+    }
+
+    pub fn remove(&mut self, start: i64, end: i64) {
+        match (self.is_inside(start), self.is_inside(end)) {
+            (true, true) => {
+                self.remove_between(start..end);
+                self.bounds.insert(start, IntervalEdge::End);
+                self.bounds.insert(end, IntervalEdge::Start);
+            }
+            (true, false) => {
+                self.remove_between(start..end);
+                self.bounds.insert(start, IntervalEdge::End);
+            }
+            (false, true) => {
+                self.remove_between(start..end);
+                self.bounds.insert(end, IntervalEdge::Start);
+            }
+            (false, false) => {
+                self.remove_between(start..end);
+            }
         }
-        self.bounds.insert(start, IntervalEdge::StartInclusive);
-        self.bounds.insert(end, IntervalEdge::EndExclusive);
+    }
+
+    pub fn remove_one(&mut self, x: i64) {
+        self.remove(x, x + 1);
     }
 
     pub fn is_inside(&self, x: i64) -> bool {
         if let Some(edge) = self.bounds.range(..=x).next_back() {
-            edge.1 == &IntervalEdge::StartInclusive
+            edge.1 == &IntervalEdge::Start
         } else {
             false
         }
+    }
+
+    pub fn covered_size(&self) -> i64 {
+        let mut total = 0;
+        for (left, right) in self.bounds.iter().tuple_windows() {
+            match left.1 {
+                IntervalEdge::Start => {
+                    total += right.0 - left.0;
+                }
+                IntervalEdge::End => {}
+            }
+        }
+        total
     }
 }
