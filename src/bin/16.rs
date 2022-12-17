@@ -527,59 +527,45 @@ fn main() {
 
                 let mut item = item.clone();
 
-                if item.me_pos > item.el_pos {
+                if part2 && item.me_pos > item.el_pos {
                     swap(&mut item.me_pos, &mut item.el_pos);
                 }
 
                 let (me_rate, me_options) = valves[&item.me_pos].clone();
                 let (el_rate, el_options) = valves[&item.el_pos].clone();
 
-                result.push(Some((item.tick(), item.lost)));
+                result.push(Some(item.clone()));
 
                 if part2 {
                     for me_option in me_options.clone() {
-                        result.push(
-                            item.me_goto(me_option)
-                                .open(item.el_pos, el_rate)
-                                .map(|x| (x.tick(), item.lost - el_rate)),
-                        );
+                        result.push(item.me_goto(me_option).open(item.el_pos, el_rate));
                     }
 
                     if item.me_pos != item.el_pos {
                         result.push(
                             item.open(item.el_pos, el_rate)
-                                .and_then(|item2| item2.open(item2.me_pos, me_rate))
-                                .map(|x| (x.tick(), item.lost - me_rate - el_rate)),
+                                .and_then(|item2| item2.open(item2.me_pos, me_rate)),
                         );
                     }
 
                     for el_option in el_options.clone() {
                         for me_option in me_options.clone() {
-                            result.push(Some((
-                                item.me_goto(me_option).el_goto(el_option).tick(),
-                                item.lost,
-                            )));
+                            result.push(Some(item.me_goto(me_option).el_goto(el_option)));
                         }
                     }
 
                     for el_option in el_options {
-                        result.push(
-                            item.el_goto(el_option)
-                                .open(item.me_pos, me_rate)
-                                .map(|x| (x.tick(), item.lost - me_rate)),
-                        );
+                        result.push(item.el_goto(el_option).open(item.me_pos, me_rate));
                     }
                 } else {
                     for me_option in me_options {
-                        result.push(Some((item.me_goto(me_option).tick(), item.lost)));
+                        result.push(Some(item.me_goto(me_option)));
                     }
-                    result.push(
-                        item.open(item.me_pos, me_rate)
-                            .map(|x| (x.tick(), item.lost - me_rate)),
-                    );
+
+                    result.push(item.open(item.me_pos, me_rate));
                 }
 
-                result.into_iter().flatten()
+                result.into_iter().flatten().map(|x| (x.tick(), x.lost))
             },
             |item| item.minutes == total_minutes,
         )
