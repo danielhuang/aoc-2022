@@ -398,22 +398,16 @@ use aoc_2022::*;
 fn main() {
     let input = load_input(18);
 
-    dbg!(&input);
-
     let mut points = HashSet::new();
 
     for line in input.lines() {
         let [x, y, z] = grab_nums(line);
-
-        dbg!(x, y, z);
 
         assert!(x.abs() <= 50 && y.abs() <= 50 && z.abs() <= 50);
 
         let c = Coordinate3D(x, y, z);
         points.insert(c);
     }
-
-    dbg!(&points);
 
     let adj = [
         Coordinate3D(-1, 0, 0),
@@ -459,8 +453,6 @@ fn main() {
             }
         }
     }
-
-    dbg!(points.len(), full_points.len());
 
     let mut count = 0;
 
