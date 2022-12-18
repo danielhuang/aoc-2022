@@ -238,6 +238,10 @@ impl Coordinate2D {
     pub fn right(self, n: i64) -> Self {
         self + Self(1, 0) * n
     }
+
+    pub fn swap_coords(self) -> Self {
+        Coordinate2D(self.1, self.0)
+    }
 }
 
 impl Debug for Coordinate2D {
@@ -270,6 +274,20 @@ pub fn parse_grid<T: Clone>(s: &str, mut f: impl FnMut(char) -> T, default: T) -
     for (y, line) in s.lines().enumerate() {
         for (x, c) in line.chars().enumerate() {
             grid[Coordinate2D(x as _, y as _)] = f(c);
+        }
+    }
+
+    grid
+}
+
+pub fn parse_hashset(s: &str, mut f: impl FnMut(char) -> bool) -> HashSet<Coordinate2D> {
+    let mut grid = HashSet::new();
+
+    for (y, line) in s.lines().enumerate() {
+        for (x, c) in line.chars().enumerate() {
+            if f(c) {
+                grid.insert(Coordinate2D(x as _, y as _));
+            }
         }
     }
 

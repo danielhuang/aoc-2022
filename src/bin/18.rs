@@ -395,191 +395,83 @@
 
 use aoc_2022::*;
 
-const ROCKS: &str = "####
-
-.#.
-###
-.#.
-
-..#
-..#
-###
-
-#
-#
-#
-#
-
-##
-##";
-
-#[derive(Default)]
-struct Grid {
-    rows: BTreeMap<i64, [bool; 7]>,
-}
-
-impl Grid {
-    fn insert(&mut self, c: Coordinate2D) {
-        self.rows.entry(c.1).or_default()[c.0 as usize] = true;
-    }
-
-    fn contains(&self, c: Coordinate2D) -> bool {
-        self.rows.get(&c.1).is_some_and(|x| x[c.0 as usize])
-    }
-
-    fn bounds(&self) -> (i64, i64) {
-        let &min = self.rows.iter().find(|x| x.1.iter().any(|&x| x)).unwrap().0;
-        let &max = self
-            .rows
-            .iter()
-            .rev()
-            .find(|x| x.1.iter().any(|&x| x))
-            .unwrap()
-            .0;
-        (min, max)
-    }
-
-    fn retain(&mut self, mut f: impl FnMut(i64) -> bool) {
-        self.rows.retain(|&k, _| f(k))
-    }
-}
-
-fn reset_if_needed(grid: &mut Grid) {
-    let (min, max) = grid.bounds();
-
-    for row in min..=max {
-        if (0..7).all(|i| grid.contains(Coordinate2D(i, row))) {
-            grid.retain(|r| r <= row + 10);
-            grid.insert(Coordinate2D(0, max));
-            return;
-        }
-    }
-}
-
 fn main() {
-    let input = load_input(17);
-    let input = input.trim();
+    let input = load_input(18);
 
-    let cycles = input.len();
+    dbg!(&input);
 
-    let mut input = input.chars().cycle().peekable();
+    let mut points = HashSet::new();
 
-    let rocks = ROCKS
-        .split("\n\n")
-        .map(|r| parse_hashset(r, |f| f == '#'))
-        .collect_vec();
+    for line in input.lines() {
+        let [x, y, z] = grab_nums(line);
 
-    let mut rock_n = 0;
+        dbg!(x, y, z);
 
-    let mut grid = Grid::default();
-    for i in 0..7 {
-        grid.insert(Coordinate2D(i, 0));
+        assert!(x.abs() <= 50 && y.abs() <= 50 && z.abs() <= 50);
+
+        let c = Coordinate3D(x, y, z);
+        points.insert(c);
     }
 
-    let mut incs = vec![];
+    dbg!(&points);
 
-    let total = 1000000000000;
+    let adj = [
+        Coordinate3D(-1, 0, 0),
+        Coordinate3D(1, 0, 0),
+        Coordinate3D(0, -1, 0),
+        Coordinate3D(0, 1, 0),
+        Coordinate3D(0, 0, -1),
+        Coordinate3D(0, 0, 1),
+    ];
 
-    let mut prev_height = 0;
+    let mut count = 0;
 
-    let start_count = (cycles * 2).max(2022);
-
-    let mut part1 = 0;
-
-    for i in 0..start_count {
-        let rock = rocks[rock_n].clone();
-        let rock_width = [4, 3, 3, 1, 2][rock_n];
-        let rock_height = [1, 3, 3, 4, 2][rock_n];
-
-        let mut corner = Coordinate2D(2, grid.bounds().0 - 3 - rock_height);
-
-        while let Some(&c) = input.peek() {
-            let left = corner.0;
-            let right = corner.0 + rock_width;
-
-            if check_overlap(&rock, &grid, corner) {
-                corner = corner.up(1);
-                break;
+    for p in points.clone() {
+        for a in adj {
+            let side = p + a;
+            if !points.contains(&side) {
+                count += 1;
             }
+        }
+    }
 
-            match c {
-                '<' => {
-                    if left > 0 && !check_overlap(&rock, &grid, corner.left(1)) {
-                        corner = corner.left(1)
-                    }
+    cp(count);
+
+    let air = bfs_reach(Coordinate3D(50, 50, 50), |&c| {
+        adj.iter()
+            .copied()
+            .map(|x| x + c)
+            .filter(|x| {
+                x.0.abs() <= 50 && x.1.abs() <= 50 && x.2.abs() <= 50 && !points.contains(x)
+            })
+            .collect_vec()
+    })
+    .collect_set();
+
+    let mut full_points = HashSet::new();
+
+    for x in -50..50 {
+        for y in -50..50 {
+            for z in -50..50 {
+                if !air.contains(&Coordinate3D(x, y, z)) {
+                    full_points.insert(Coordinate3D(x, y, z));
                 }
-                '>' => {
-                    if right < 7 && !check_overlap(&rock, &grid, corner.right(1)) {
-                        corner = corner.right(1)
-                    }
-                }
-                _ => unreachable!(),
             }
-
-            corner = corner.down(1);
-
-            input.next();
-        }
-
-        for &c in rock.iter() {
-            grid.insert(corner + c);
-        }
-
-        rock_n += 1;
-        rock_n %= rocks.len();
-
-        reset_if_needed(&mut grid);
-
-        let (min, max) = grid.bounds();
-
-        let height = max - min;
-
-        if i + 1 == 2022 && part1 == 0 {
-            part1 = height;
-            cp(part1);
-        }
-
-        incs.push(height - prev_height);
-        prev_height = height;
-    }
-
-    let split = incs.split(|&x| x == 0).collect_vec();
-
-    let longest_split = split.iter().skip(1).max_by_key(|x| x.len()).unwrap();
-    let split2 = split.split(|x| x == longest_split).collect_vec();
-
-    let repeats_every = longest_split.len()
-        + 1
-        + split2[split2.len() - 2]
-            .iter()
-            .map(|x| x.len() + 1)
-            .sum::<usize>();
-
-    let mut expected_incs_len = incs.len();
-
-    while (total - expected_incs_len) % repeats_every != 0 {
-        expected_incs_len += 1;
-    }
-
-    let cycle_height = incs.iter().rev().take(repeats_every).sum::<i64>();
-
-    while incs.len() < expected_incs_len {
-        let next = incs[incs.len() - repeats_every];
-        incs.push(next);
-    }
-
-    let mut sum = incs.iter().sum::<i64>();
-
-    sum += cycle_height * ((total - incs.len()) / repeats_every).int();
-
-    cp(sum);
-}
-
-fn check_overlap(rock: &HashSet<Coordinate2D>, grid: &Grid, corner: Coordinate2D) -> bool {
-    for &c in rock.iter() {
-        if grid.contains(corner + c) {
-            return true;
         }
     }
-    false
+
+    dbg!(points.len(), full_points.len());
+
+    let mut count = 0;
+
+    for p in full_points.clone() {
+        for a in adj {
+            let side = p + a;
+            if !full_points.contains(&side) {
+                count += 1;
+            }
+        }
+    }
+
+    cp(count);
 }
