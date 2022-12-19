@@ -26,6 +26,7 @@ pub use std::fs::{read_to_string, File};
 pub use std::hash::Hash;
 pub use std::io::Write;
 pub use std::iter::from_fn;
+use std::mem::take;
 pub use std::ops::Mul;
 use std::ops::{Div, RangeBounds};
 pub use std::process::{Command, Stdio};
@@ -389,6 +390,15 @@ impl Div<i64> for Coordinate3D {
 }
 
 impl Coordinate3D {
+    pub const ADJACENT: [Coordinate3D; 6] = [
+        Coordinate3D(-1, 0, 0),
+        Coordinate3D(1, 0, 0),
+        Coordinate3D(0, -1, 0),
+        Coordinate3D(0, 1, 0),
+        Coordinate3D(0, 0, -1),
+        Coordinate3D(0, 0, 1),
+    ];
+
     pub fn cross(self, other: Self) -> Self {
         let Self(a, b, c) = self;
         let Self(x, y, z) = other;
@@ -399,8 +409,12 @@ impl Coordinate3D {
         self.0.abs() + self.1.abs() + self.2.abs()
     }
 
-    pub fn manhat_corners(self) -> i64 {
+    pub fn manhat_diag(self) -> i64 {
         self.0.abs().max(self.1.abs()).max(self.2.abs())
+    }
+
+    pub fn adjacent(self) -> [Self; 6] {
+        Self::ADJACENT.map(|x| x + self)
     }
 }
 
@@ -794,4 +808,36 @@ impl Intervals {
         }
         total
     }
+}
+
+pub fn bfs2<T: Clone + Hash + Eq, I: IntoIterator<Item = T>>(
+    start: T,
+    mut find_nexts: impl FnMut(usize, T) -> I,
+) -> impl Iterator<Item = (usize, T)> {
+    let mut edge = VecDeque::new();
+    let mut seen = HashSet::new();
+
+    seen.insert(start.clone());
+    edge.push_back(start);
+
+    let mut i = 0;
+
+    from_fn(move || {
+        let mut result = vec![];
+        for _ in 0..edge.len() {
+            let item = edge.pop_front()?;
+            let nexts = find_nexts(i, item.clone());
+            for next in nexts {
+                seen.insert(next.clone());
+                edge.push_back(next);
+            }
+            result.push((i, item));
+        }
+        i += 1;
+        if result.is_empty() {
+            return None;
+        }
+        Some(result)
+    })
+    .flatten()
 }

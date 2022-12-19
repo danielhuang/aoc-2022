@@ -394,62 +394,199 @@
 )]
 
 use aoc_2022::*;
+use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+struct State {
+    ores: i64,
+    clays: i64,
+    obsidians: i64,
+    geodes: i64,
+    ore_robots: i64,
+    clay_robots: i64,
+    obsidian_robots: i64,
+    geode_robots: i64,
+    time_left: i64,
+}
+
+impl State {
+    fn tick(&mut self) {
+        assert!(self.time_left > 0);
+        self.ores += self.ore_robots;
+        self.clays += self.clay_robots;
+        self.obsidians += self.obsidian_robots;
+        self.geodes += self.geode_robots;
+        self.time_left -= 1;
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+struct Blueprint {
+    ore_cost_ore: i64,
+    clay_cost_ore: i64,
+    obsidian_cost_ore: i64,
+    obsidian_cost_clay: i64,
+    geode_cost_ore: i64,
+    geode_cost_obsidian: i64,
+}
+
+fn geodes_possible(blueprint: Blueprint, state: State, max: &mut i64) -> i64 {
+    let mut state = state;
+
+    let mut skipped_ore = false;
+    let mut skipped_clay = false;
+    let mut skipped_obsidian = false;
+    let mut skipped_geode = false;
+
+    while state.time_left > 0 {
+        if *max > assume_free_robots(state.clone()) {
+            return *max;
+        }
+
+        if !skipped_ore
+            && state.time_left > 0
+            && state.ores >= blueprint.geode_cost_ore
+            && state.obsidians >= blueprint.geode_cost_obsidian
+        {
+            skipped_ore = true;
+
+            let mut state2 = state.clone();
+            state2.ores -= blueprint.geode_cost_ore;
+            state2.obsidians -= blueprint.geode_cost_obsidian;
+
+            state2.tick();
+            state2.geode_robots += 1;
+
+            let cur = geodes_possible(blueprint, state2, max);
+
+            *max = cur.max(*max);
+        } else {
+            if !skipped_clay
+                && state.time_left > 0
+                && state.ores >= blueprint.obsidian_cost_ore
+                && state.clays >= blueprint.obsidian_cost_clay
+                && state.obsidian_robots < blueprint.geode_cost_obsidian
+            {
+                skipped_clay = true;
+
+                let mut state2 = state.clone();
+                state2.ores -= blueprint.obsidian_cost_ore;
+                state2.clays -= blueprint.obsidian_cost_clay;
+
+                state2.tick();
+                state2.obsidian_robots += 1;
+
+                let cur = geodes_possible(blueprint, state2, max);
+
+                *max = cur.max(*max);
+            }
+
+            if !skipped_obsidian
+                && state.time_left > 0
+                && state.ores >= blueprint.clay_cost_ore
+                && state.clay_robots < blueprint.obsidian_cost_clay
+            {
+                skipped_obsidian = true;
+
+                let mut state2 = state.clone();
+                state2.ores -= blueprint.clay_cost_ore;
+
+                state2.tick();
+                state2.clay_robots += 1;
+
+                let cur = geodes_possible(blueprint, state2, max);
+
+                *max = cur.max(*max);
+            }
+
+            if !skipped_geode
+                && state.time_left > 0
+                && state.ores >= blueprint.ore_cost_ore
+                && state.ore_robots
+                    < blueprint.ore_cost_ore
+                        + blueprint.clay_cost_ore
+                        + blueprint.obsidian_cost_ore
+                        + blueprint.geode_cost_ore
+            {
+                skipped_geode = true;
+
+                let mut state2 = state.clone();
+                state2.ores -= blueprint.ore_cost_ore;
+
+                state2.tick();
+                state2.ore_robots += 1;
+
+                let cur = geodes_possible(blueprint, state2, max);
+
+                *max = cur.max(*max);
+            }
+        }
+
+        state.tick();
+        *max = state.geodes.max(*max);
+    }
+
+    *max
+}
+
+fn assume_free_robots(state: State) -> i64 {
+    let time_left = state.time_left;
+    state.geodes + state.geode_robots * time_left + (0..time_left).sum::<i64>()
+}
+
+fn init(time_left: i64) -> State {
+    State {
+        ores: 0,
+        clays: 0,
+        obsidians: 0,
+        geodes: 0,
+        ore_robots: 1,
+        clay_robots: 0,
+        obsidian_robots: 0,
+        geode_robots: 0,
+        time_left,
+    }
+}
 
 fn main() {
-    let input = load_input(18);
+    let input = load_input(19);
 
-    let mut points = HashSet::new();
+    let input = if DEBUG {
+        input.split("\n\n").collect_vec()
+    } else {
+        input.lines().collect_vec()
+    };
 
-    for line in input.lines() {
-        let [x, y, z] = grab_nums(line);
+    let mut v = vec![];
 
-        assert!(x.abs() <= 50 && y.abs() <= 50 && z.abs() <= 50);
+    for line in input {
+        let [id, ore_cost_ore, clay_cost_ore, obsidian_cost_ore, obsidian_cost_clay, geode_cost_ore, geode_cost_obsidian] =
+            grab_nums(line);
 
-        let c = Coordinate3D(x, y, z);
-        points.insert(c);
+        let blueprint = Blueprint {
+            ore_cost_ore,
+            clay_cost_ore,
+            obsidian_cost_ore,
+            obsidian_cost_clay,
+            geode_cost_ore,
+            geode_cost_obsidian,
+        };
+
+        v.push((blueprint, id));
     }
 
-    let mut count = 0;
+    let part1: i64 = v
+        .par_iter()
+        .map(|(blueprint, id)| geodes_possible(*blueprint, init(24), &mut 0) * id)
+        .sum();
 
-    for p in points.clone() {
-        for side in p.adjacent() {
-            if !points.contains(&side) {
-                count += 1;
-            }
-        }
-    }
+    cp(part1);
 
-    cp(count);
+    let part2: i64 = v
+        .par_iter()
+        .take(3)
+        .map(|(blueprint, _)| geodes_possible(*blueprint, init(32), &mut 0))
+        .product();
 
-    let air = bfs_reach(Coordinate3D(50, 50, 50), |&c| {
-        c.adjacent()
-            .into_iter()
-            .filter(|x| x.manhat_diag() <= 50 && !points.contains(x))
-            .collect_vec()
-    })
-    .collect_set();
-
-    let mut full_points = HashSet::new();
-
-    for x in -50..50 {
-        for y in -50..50 {
-            for z in -50..50 {
-                if !air.contains(&Coordinate3D(x, y, z)) {
-                    full_points.insert(Coordinate3D(x, y, z));
-                }
-            }
-        }
-    }
-
-    let mut count = 0;
-
-    for p in full_points.clone() {
-        for side in p.adjacent() {
-            if !full_points.contains(&side) {
-                count += 1;
-            }
-        }
-    }
-
-    cp(count);
+    cp(part2);
 }
