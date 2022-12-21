@@ -3,7 +3,7 @@
 #![feature(return_position_impl_trait_in_trait)]
 #![feature(iter_array_chunks)]
 #![feature(const_for)]
-#![feature(box_syntax, box_patterns)]
+#![feature(box_syntax, box_patterns, is_some_and)]
 
 pub use defaultmap::DefaultHashMap;
 use derive_more::Neg;
@@ -31,8 +31,9 @@ pub use std::ops::Mul;
 use std::ops::{Div, RangeBounds};
 pub use std::process::{Command, Stdio};
 use std::str::FromStr;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Mutex;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 pub use std::{env, io};
 
 #[cfg(debug_assertions)]
@@ -840,4 +841,15 @@ pub fn bfs2<T: Clone + Hash + Eq, I: IntoIterator<Item = T>>(
         Some(result)
     })
     .flatten()
+}
+
+static SOMETIMES: Mutex<Option<Instant>> = Mutex::new(None);
+
+pub fn sometimes() -> bool {
+    let mut s = SOMETIMES.lock().unwrap();
+    let result = s.is_none() || s.is_some_and(|x| x.elapsed() > Duration::from_millis(250));
+    if result {
+        *s = Some(Instant::now());
+    }
+    result
 }
