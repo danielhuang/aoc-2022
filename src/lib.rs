@@ -158,11 +158,11 @@ impl Coordinate2D {
         Self::ADJACENT_CORNERS.map(|x| self + x)
     }
 
-    pub fn rotate(self) -> Self {
+    pub fn rotate_left(self) -> Self {
         Self(self.1, -self.0)
     }
 
-    pub fn rotate3(self) -> Self {
+    pub fn rotate_right(self) -> Self {
         Self(-self.1, self.0)
     }
 
