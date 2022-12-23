@@ -26,12 +26,10 @@ pub use std::fs::{read_to_string, File};
 pub use std::hash::Hash;
 pub use std::io::Write;
 pub use std::iter::from_fn;
-use std::mem::take;
 pub use std::ops::Mul;
 use std::ops::{Div, RangeBounds};
 pub use std::process::{Command, Stdio};
 use std::str::FromStr;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 pub use std::{env, io};
@@ -852,4 +850,47 @@ pub fn sometimes() -> bool {
         *s = Some(Instant::now());
     }
     result
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Bounds {
+    min_x: i64,
+    max_x: i64,
+    min_y: i64,
+    max_y: i64,
+}
+
+impl Bounds {
+    pub fn width(&self) -> i64 {
+        self.max_x - self.min_x + 1
+    }
+
+    pub fn height(&self) -> i64 {
+        self.max_y - self.min_y + 1
+    }
+
+    pub fn area(&self) -> i64 {
+        self.width() * self.height()
+    }
+}
+
+pub fn bounds(i: impl IntoIterator<Item = Coordinate2D>) -> Bounds {
+    let mut i = i.into_iter();
+
+    let first = i.next().expect("must have at least one point");
+    let mut bounds = Bounds {
+        min_x: first.0,
+        max_x: first.0,
+        min_y: first.1,
+        max_y: first.1,
+    };
+
+    for c in i {
+        bounds.min_x = bounds.min_x.min(c.0);
+        bounds.max_x = bounds.max_x.max(c.0);
+        bounds.min_y = bounds.min_y.min(c.1);
+        bounds.max_y = bounds.max_y.max(c.1);
+    }
+
+    bounds
 }
