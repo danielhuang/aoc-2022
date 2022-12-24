@@ -16,6 +16,7 @@ name = "aoc-2022"
 version = "0.1.0"
 dependencies = [
  "btreelist",
+ "btreemultimap",
  "cached",
  "cli-clipboard",
  "defaultmap",
@@ -23,6 +24,7 @@ dependencies = [
  "itertools",
  "lazy-regex",
  "mimalloc",
+ "multimap",
  "num",
  "owo-colors",
  "pathfinding",
@@ -96,6 +98,15 @@ name = "btreelist"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b76f52c2902eb5c064119bafd4c20fd7006341e8892be1e28e19946721af938"
+
+[[package]]
+name = "btreemultimap"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aba7eaea18547dd4915e745859622e5f796e5b08f5d594735ed0e08d051f97ca"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bumpalo"
@@ -834,6 +845,15 @@ dependencies = [
  "log",
  "wasi",
  "windows-sys 0.42.0",
+]
+
+[[package]]
+name = "multimap"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

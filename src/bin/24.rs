@@ -395,70 +395,121 @@
     yeet_desugar_details
 )]
 
+use std::sync::Arc;
+
 use aoc_2022::*;
 
 fn main() {
-    let input = load_input(23);
+    let input = load_input(24);
 
-    let mut grid = parse_hashset(&input, |c| c == '#');
+    let grid = parse_grid(&input, |c| c, '#');
 
-    let offsets = [Coordinate2D(1, 0), Coordinate2D(1, 1), Coordinate2D(1, -1)];
-    let mut directions = [
-        offsets.map(|x| x.rotate_left()),
-        offsets.map(|x| x.rotate_right()),
-        offsets.map(|x| -x),
-        offsets,
-    ];
+    let end = grid
+        .iter()
+        .filter(|x| *x.1 == '.')
+        .map(|x| *x.0)
+        .max_by_key(|x| x.1)
+        .unwrap();
 
-    let mut part2 = None;
+    let start = Coordinate2D(1, 0);
 
-    for i in 1.. {
-        let prev_grid = grid.clone();
+    let mut bliz_cache: BTreeMap<usize, Arc<Vec<(Coordinate2D, char)>>> = Default::default();
+    let mut bliz_avoid_cache: BTreeMap<usize, HashSet<Coordinate2D>> = BTreeMap::new();
 
-        let mut proposes = DefaultHashMap::new(0);
-        let mut sources = HashMap::new();
-        for &c in grid.iter() {
-            if c.adjacent_corners().iter().any(|x| grid.contains(x)) {
-                for offset in directions {
-                    if !grid.contains(&(c + offset[0]))
-                        && !grid.contains(&(c + offset[1]))
-                        && !grid.contains(&(c + offset[2]))
-                    {
-                        proposes[c + offset[0]] += 1;
-                        sources.insert(c + offset[0], c);
-                        break;
-                    }
+    let blizzards: Vec<_> = grid
+        .iter()
+        .filter(|x| ['>', '<', '^', 'v'].contains(x.1))
+        .map(|(a, b)| (*a, *b))
+        .collect();
+
+    let blizzards = Arc::new(blizzards);
+    bliz_cache.insert(0, blizzards);
+
+    let init = (0, start, 0);
+
+    for steps_needed in [1, 3] {
+        let mut max_step = 0;
+        let result = bfs(
+            &init,
+            |(ticks, pos, step)| {
+                if *step < max_step {
+                    return vec![];
                 }
-            }
-        }
+                max_step = max_step.max(*step);
 
-        for (&c, &count) in proposes.iter() {
-            if count == 1 {
-                grid.insert(c);
-                grid.remove(&sources[&c]);
-            }
-        }
+                let mut goto = HashSet::new();
+                goto.insert(*pos);
 
-        directions = directions
-            .into_iter()
-            .cycle()
-            .skip(1)
-            .take(4)
-            .collect_vec()
-            .try_into()
-            .unwrap();
+                let bliz_next = if let Some(out) = bliz_cache.get(&(ticks + 1)) {
+                    out.clone()
+                } else {
+                    let blizzards = bliz_cache[ticks].clone();
 
-        if i == 10 {
-            let b = bounds(grid.iter().copied());
-            cp(b.area() - grid.len().int());
-        }
+                    let mut bliz_next: Vec<(Coordinate2D, char)> = Vec::new();
+                    for (pos, direction) in blizzards.iter().cloned() {
+                        let mut next = if direction == '<' {
+                            pos.left(1)
+                        } else if direction == '>' {
+                            pos.right(1)
+                        } else if direction == 'v' {
+                            pos.down(1)
+                        } else if direction == '^' {
+                            pos.up(1)
+                        } else {
+                            unreachable!();
+                        };
+                        if grid[next] == '#' {
+                            let unit = next - pos;
+                            next += -unit;
+                            while grid[next] != '#' {
+                                next += -unit;
+                            }
+                            next += unit;
+                        }
+                        bliz_next.push((next, direction));
+                    }
+                    bliz_cache.insert(ticks + 1, Arc::new(bliz_next));
+                    bliz_cache[&(ticks + 1)].clone()
+                };
 
-        if grid == prev_grid {
-            assert!(i > 10);
-            part2 = Some(i);
-            break;
-        }
+                let bliz_avoid = if let Some(out) = bliz_avoid_cache.get(ticks) {
+                    out.clone()
+                } else {
+                    let mut bliz_avoid = HashSet::new();
+
+                    for pos in bliz_next.iter().map(|x| x.0) {
+                        bliz_avoid.insert(pos);
+                    }
+                    bliz_avoid_cache.insert(*ticks, bliz_avoid.clone());
+
+                    bliz_avoid
+                };
+
+                goto.extend(pos.adjacent());
+
+                goto.retain(|&x| !bliz_avoid.contains(&x));
+                goto.retain(|&x| grid[x] != '#');
+
+                let mut result = vec![];
+                for next in goto {
+                    let mut step = *step;
+                    if step == 0 && next == end {
+                        step = 1;
+                    }
+                    if step == 1 && next == start {
+                        step = 2;
+                    }
+                    if step == 2 && next == end {
+                        step = 3;
+                    }
+                    result.push((ticks + 1, next, step))
+                }
+
+                result
+            },
+            |x| x.2 == steps_needed,
+        );
+
+        cp(result.unwrap().len() - 1);
     }
-
-    cp(part2.unwrap());
 }

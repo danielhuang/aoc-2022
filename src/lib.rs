@@ -30,6 +30,7 @@ pub use std::ops::Mul;
 use std::ops::{Div, RangeBounds};
 pub use std::process::{Command, Stdio};
 use std::str::FromStr;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 pub use std::{env, io};
@@ -841,12 +842,16 @@ pub fn bfs2<T: Clone + Hash + Eq, I: IntoIterator<Item = T>>(
     .flatten()
 }
 
-static SOMETIMES: Mutex<Option<Instant>> = Mutex::new(None);
-
 pub fn sometimes() -> bool {
-    let mut s = SOMETIMES.lock().unwrap();
+    static PREV: Mutex<Option<Instant>> = Mutex::new(None);
+    static COUNT: AtomicUsize = AtomicUsize::new(0);
+
+    let count = COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+    let mut s = PREV.lock().unwrap();
     let result = s.is_none() || s.is_some_and(|x| x.elapsed() > Duration::from_millis(250));
     if result {
+        println!("sometimes count: {count}");
         *s = Some(Instant::now());
     }
     result
@@ -854,10 +859,10 @@ pub fn sometimes() -> bool {
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Bounds {
-    min_x: i64,
-    max_x: i64,
-    min_y: i64,
-    max_y: i64,
+    pub min_x: i64,
+    pub max_x: i64,
+    pub min_y: i64,
+    pub max_y: i64,
 }
 
 impl Bounds {
