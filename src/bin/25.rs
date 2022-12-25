@@ -395,123 +395,64 @@
     yeet_desugar_details
 )]
 
-use std::sync::Arc;
-
 use aoc_2022::*;
 
 fn main() {
-    let input = load_input(24);
+    let input = load_input(25);
 
-    let grid = parse_grid(&input, |c| c, '#');
+    let mut sum = 0;
 
-    let end = grid
-        .iter()
-        .filter(|x| *x.1 == '.')
-        .map(|x| *x.0)
-        .max_by_key(|x| x.1)
-        .unwrap();
-
-    let start = Coordinate2D(1, 0);
-
-    let mut bliz_cache: Vec<Arc<Vec<(Coordinate2D, char)>>> = Default::default();
-    let mut bliz_avoid_cache: Vec<HashSet<Coordinate2D>> = Vec::new();
-
-    let blizzards: Vec<_> = grid
-        .iter()
-        .filter(|x| ['>', '<', '^', 'v'].contains(x.1))
-        .map(|(a, b)| (*a, *b))
-        .collect();
-
-    let blizzards = Arc::new(blizzards);
-    bliz_cache.insert(0, blizzards);
-
-    let init = (0, start, 0);
-
-    for steps_needed in [1, 3] {
-        let mut max_step = 0;
-        let result = bfs(
-            &init,
-            |(ticks, pos, step)| {
-                if *step < max_step {
-                    return vec![];
-                }
-                max_step = max_step.max(*step);
-
-                let mut goto = HashSet::new();
-                goto.insert(*pos);
-
-                let bliz_next = if let Some(out) = bliz_cache.get(ticks + 1) {
-                    out.clone()
-                } else {
-                    let blizzards = bliz_cache[*ticks].clone();
-
-                    let mut bliz_next: Vec<(Coordinate2D, char)> = Vec::new();
-                    for (pos, direction) in blizzards.iter().cloned() {
-                        let mut next = if direction == '<' {
-                            pos.left(1)
-                        } else if direction == '>' {
-                            pos.right(1)
-                        } else if direction == 'v' {
-                            pos.down(1)
-                        } else if direction == '^' {
-                            pos.up(1)
-                        } else {
-                            unreachable!();
-                        };
-                        if grid[next] == '#' {
-                            let unit = next - pos;
-                            next += -unit;
-                            while grid[next] != '#' {
-                                next += -unit;
-                            }
-                            next += unit;
-                        }
-                        bliz_next.push((next, direction));
-                    }
-                    assert_eq!(bliz_cache.len() - 1, *ticks);
-                    bliz_cache.push(Arc::new(bliz_next));
-                    bliz_cache[ticks + 1].clone()
-                };
-
-                let bliz_avoid = if let Some(out) = bliz_avoid_cache.get(*ticks) {
-                    out.clone()
-                } else {
-                    let mut bliz_avoid = HashSet::new();
-
-                    for pos in bliz_next.iter().map(|x| x.0) {
-                        bliz_avoid.insert(pos);
-                    }
-                    assert_eq!(bliz_avoid_cache.len(), *ticks);
-                    bliz_avoid_cache.push(bliz_avoid.clone());
-
-                    bliz_avoid
-                };
-
-                goto.extend(pos.adjacent());
-
-                goto.retain(|&x| !bliz_avoid.contains(&x));
-                goto.retain(|&x| grid[x] != '#');
-
-                let mut result = vec![];
-                for next in goto {
-                    let mut step = *step;
-                    if step == 0 && next == end {
-                        step = 1;
-                    }
-                    if step == 1 && next == start {
-                        step = 2;
-                    }
-                    if step == 2 && next == end {
-                        step = 3;
-                    }
-                    result.push((ticks + 1, next, step))
-                }
-
-                result
-            },
-            |x| x.2 == steps_needed,
-        );
-
-        cp(result.unwrap().len() - 1);
+    for line in input.lines() {
+        let num = decode(line);
+        sum += num;
     }
+
+    cp(encode(sum));
+}
+
+fn encode(num: i64) -> String {
+    let mut left = num;
+    let mut digits = vec![];
+    while left != 0 {
+        let mut temp = left % 5;
+        if temp > 2 {
+            temp -= 5;
+            left += 5;
+        }
+        digits.push(temp);
+        left /= 5;
+    }
+
+    digits
+        .iter()
+        .rev()
+        .map(|&x| match x {
+            2 => '2',
+            1 => '1',
+            0 => '0',
+            -1 => '-',
+            -2 => '=',
+            _ => unreachable!(),
+        })
+        .collect_string()
+}
+
+fn decode(num: &str) -> i64 {
+    let digits = num.chars().rev().collect_vec();
+
+    let mut sum = 0;
+
+    for (i, digit) in digits.iter().enumerate() {
+        let v = match digit {
+            '2' => 2,
+            '1' => 1,
+            '0' => 0,
+            '-' => -1,
+            '=' => -2,
+            _ => unreachable!(),
+        };
+        sum += 5i64.pow(i as _) * v;
+    }
+
+    sum
 }
