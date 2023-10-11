@@ -3,7 +3,7 @@
 #![feature(return_position_impl_trait_in_trait)]
 #![feature(iter_array_chunks)]
 #![feature(const_for)]
-#![feature(box_syntax, box_patterns, is_some_and)]
+#![feature(box_patterns)]
 
 pub use defaultmap::DefaultHashMap;
 use derive_more::Neg;
@@ -42,7 +42,7 @@ pub const DEBUG: bool = true;
 pub const DEBUG: bool = false;
 
 fn fetch(url: &str) -> String {
-    let input = Client::new()
+    Client::new()
         .get(url)
         .header(
             "cookie",
@@ -57,8 +57,7 @@ fn fetch(url: &str) -> String {
         .error_for_status()
         .unwrap()
         .text()
-        .unwrap();
-    input
+        .unwrap()
 }
 
 static SUBMITTED: Mutex<bool> = Mutex::new(false);

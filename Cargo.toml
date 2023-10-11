@@ -9,7 +9,7 @@ edition = "2021"
 itertools = "0.10.5"
 derive_more = "0.99.17"
 petgraph = "0.6.2"
-pathfinding = { git = "https://github.com/samueltardieu/pathfinding", rev = "33e03ab726e998fe9556633626f145954a0b0fe4" }
+pathfinding = { git = "https://github.com/danielhuang/pathfinding", rev = "4bc2fcd9a75389491142e6e134dcf28bebbd45e1" }
 stringtools = { git = "https://github.com/danielhuang/stringtools" }
 regex = "1.7.0"
 serde = { version = "1.0.147", features = ["derive"] }
@@ -24,7 +24,7 @@ owo-colors = "3.5.0"
 btreelist = "0.4.0"
 reqwest = { version = "0.11.13", features = ["blocking", "cookies"] }
 mimalloc = { version = "0.1.32", default-features = false }
-num = "0.4.0"
+num = "0.4.1"
 rayon = "1.6.1"
 multimap = "0.8.3"
 btreemultimap = "0.1.0"
